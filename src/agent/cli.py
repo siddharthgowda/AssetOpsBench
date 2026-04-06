@@ -90,6 +90,11 @@ examples:
         action="store_true",
         help="Show INFO-level progress logs on stderr (default: WARNING+ only).",
     )
+    parser.add_argument(
+        "--show-times",
+        action="store_true",
+        help="Print per-phase timings (discovery, planning, per-step, summarization, total).",
+    )
     return parser
 
 
@@ -203,6 +208,18 @@ async def _run(args: argparse.Namespace) -> None:
     _print_section("Answer")
     print(result.answer)
     print()
+
+    if args.show_times:
+        _print_section("Timing")
+        print(f"  Discovery:              {result.discovery_duration_s:.3f}s")
+        print(f"  Planning:               {result.planning_duration_s:.3f}s")
+        for r in result.history:
+            tool_label = f"{r.server}/{r.tool}" if r.tool else r.server
+            print(f"  Step {r.step_number} [{tool_label}]")
+            print(f"    full step:            {r.duration_s:.3f}s")
+            print(f"    MCP tool call only:   {r.tool_call_duration_s:.3f}s")
+        print(f"  Summarization:          {result.summarization_duration_s:.3f}s")
+        print(f"  Total:                  {result.total_duration_s:.3f}s")
 
 
 def main() -> None:

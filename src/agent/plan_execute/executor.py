@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
 from pathlib import Path
 from typing import Any
 
@@ -121,7 +122,9 @@ class Executor:
                 step.task,
             )
             schema = tool_schemas.get(step.server, {}).get(step.tool, "")
+            t_step = time.perf_counter()
             result = await self.execute_step(step, context, question, tool_schema=schema)
+            result.duration_s = time.perf_counter() - t_step
             if result.success:
                 _log.info("Step %d OK.", step.step_number)
             else:
@@ -173,7 +176,9 @@ class Executor:
                 question, step.task, step.tool, tool_schema, context, self._llm
             )
 
+            t_tool = time.perf_counter()
             response = await _call_tool(server_path, step.tool, resolved_args)
+            tool_call_duration_s = time.perf_counter() - t_tool
             return StepResult(
                 step_number=step.step_number,
                 task=step.task,
@@ -181,6 +186,7 @@ class Executor:
                 response=response,
                 tool=step.tool,
                 tool_args=resolved_args,
+                tool_call_duration_s=tool_call_duration_s,
             )
         except Exception as exc:  # noqa: BLE001
             return StepResult(

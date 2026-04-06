@@ -13,6 +13,7 @@ an MCP-native implementation:
 from __future__ import annotations
 
 import logging
+import time
 from pathlib import Path
 
 from llm import LLMBackend
@@ -83,13 +84,19 @@ class PlanExecuteRunner(AgentRunner):
             OrchestratorResult with the final answer, the generated plan, and
             the per-step execution history.
         """
+        t_total = time.perf_counter()
+
         # 1. Discover
         _log.info("Discovering server capabilities...")
+        t0 = time.perf_counter()
         server_descriptions = await self._executor.get_server_descriptions()
+        discovery_duration_s = time.perf_counter() - t0
 
         # 2. Plan
         _log.info("Planning...")
+        t0 = time.perf_counter()
         plan = self._planner.generate_plan(question, server_descriptions)
+        planning_duration_s = time.perf_counter() - t0
         _log.info("Plan has %d step(s).", len(plan.steps))
 
         # 3. Execute
@@ -102,13 +109,19 @@ class PlanExecuteRunner(AgentRunner):
             + (r.response if r.success else f"ERROR: {r.error}")
             for r in history
         )
+        t0 = time.perf_counter()
         answer = self._llm.generate(
             _SUMMARIZE_PROMPT.format(question=question, results=results_text)
         )
+        summarization_duration_s = time.perf_counter() - t0
 
         return OrchestratorResult(
             question=question,
             answer=answer,
             plan=plan,
             history=history,
+            discovery_duration_s=discovery_duration_s,
+            planning_duration_s=planning_duration_s,
+            summarization_duration_s=summarization_duration_s,
+            total_duration_s=time.perf_counter() - t_total,
         )
