@@ -23,14 +23,9 @@ apt-get install -y -qq python3 python3-pip
 pip3 install -q --break-system-packages requests pandas python-dotenv
 
 echo "Loading IoT asset data (sample of NASA Li Battery Data)..."
-# COUCHDB_URL="http://localhost:5984" \
-#   python3 /couchdb/init_asset_data.py \
-#     --data-file /sample_data/iot/chiller6_june2020_sensordata_couchdb.json \
-#     --db "${IOT_DBNAME:-chiller}" \
-#     --drop
 COUCHDB_URL="http://localhost:5984" \
   python3 /couchdb/init_asset_data.py \
-    --data-file /sample_data/iot/B0006_couchdb.json \
+    --data-file /sample_data/iot/chiller6_june2020_sensordata_couchdb.json \
     --db "${IOT_DBNAME:-chiller}" \
     --drop
 
@@ -52,6 +47,19 @@ if [ -f "$VIBRATION_FILE" ]; then
       --drop
 else
   echo "⚠️ $VIBRATION_FILE not found, skipping vibration data."
+fi
+
+# Load battery aging data (NASA Li-ion cycling) into a dedicated database
+BATTERY_FILE="/sample_data/iot/battery_test_subset.json"
+if [ -f "$BATTERY_FILE" ]; then
+  echo "Loading battery data..."
+  COUCHDB_URL="http://localhost:5984" \
+    python3 /couchdb/init_asset_data.py \
+      --data-file "$BATTERY_FILE" \
+      --db "${BATTERY_DBNAME:-battery}" \
+      --drop
+else
+  echo "⚠️ $BATTERY_FILE not found, skipping battery data."
 fi
 
 echo "✅ All databases initialised."
