@@ -13,3 +13,10 @@ ahu:
   - "Belts or sheaves Wear"
   - "Improper switch position"
   - "Solenoid Valves Bound due to hardened grease"
+
+battery:
+  - "Capacity Fade: Gradual loss of charge storage due to SEI layer growth and active material degradation"
+  - "Internal Resistance Increase: Rising Re and Rct indicating electrode and electrolyte degradation"
+  - "Thermal Runaway: Cascading exothermic reactions from overheating or internal short circuit"
+  - "Lithium Plating: Metallic lithium deposition on anode during fast charge or low-temperature operation"
+  - "Electrolyte Decomposition: Chemical breakdown at high temperatures or voltages"

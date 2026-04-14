@@ -43,10 +43,12 @@ dev = [
     "pytest-anyio>=0.0.0",
 ]
 # Optional heavy ML deps for the TSFM server.
-# tsfm_public must be installed separately: pip install git+https://github.com/ibm-granite/granite-tsfm
+# granite-tsfm (tsfm_public) must be installed separately:
+#   pip install git+https://github.com/ibm-granite/granite-tsfm
 tsfm = [
     "torch>=2.0",
-    "transformers>=4.40",
+    "transformers>=4.40,<4.58",
+    "huggingface-hub>=0.34,<1.0",
 ]
 
 [tool.uv]

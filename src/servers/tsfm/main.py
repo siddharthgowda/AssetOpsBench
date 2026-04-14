@@ -46,6 +46,7 @@ from .io import (
     _get_dataset_path,
     _get_model_checkpoint_path,
     _get_outputs_path,
+    _make_json_compatible,
     _read_ts_data,
     _write_json_to_temp,
 )
@@ -57,6 +58,9 @@ from .models import (
     ErrorResult,
     FinetuningResult,
     ForecastingResult,
+    RULResult,
+    SensitivityBin,
+    SensitivityResult,
     TSADResult,
     TSFMModelEntry,
     TSFMModelsResult,
@@ -244,6 +248,12 @@ def run_tsfm_forecasting(
             json.dumps(inference_result_dict_data, indent=4)
         )
 
+        performance_dict = None
+        if "performance" in output and output["performance"] is not None:
+            perf_df = output["performance"]
+            if hasattr(perf_df, "to_dict"):
+                performance_dict = _make_json_compatible(perf_df.to_dict(orient="records"))
+
     except Exception as exc:
         logger.error("run_tsfm_forecasting failed: %s", exc)
         return ErrorResult(error=str(exc))
@@ -256,6 +266,7 @@ def run_tsfm_forecasting(
     return ForecastingResult(
         status="success",
         results_file=results_file,
+        performance=performance_dict,
         dataquality_summary=dataquality_summary,
         message=f"Forecasting complete. Predictions saved to {results_file}.",
     )
@@ -652,6 +663,229 @@ def run_integrated_tsad(
         message=(
             f"Integrated TSAD complete. {anomaly_count} anomalies in {len(df_combined)} records "
             f"across {len(target_columns)} column(s). Results saved to {csv_path}."
+        ),
+    )
+
+
+# ── Remaining Useful Life estimation ─────────────────────────────────────────
+
+
+@mcp.tool()
+def estimate_remaining_life(
+    forecast_results_file: str,
+    target_column: str,
+    failure_threshold: float,
+    direction: str = "below",
+) -> Union[RULResult, ErrorResult]:
+    """Estimate remaining useful life from a TSFM forecast by finding when a
+    metric crosses a failure threshold.
+
+    Reads the predictions JSON from run_tsfm_forecasting and determines the
+    forecast step at which target_column first crosses failure_threshold.
+
+    Args:
+        forecast_results_file: Path to JSON from run_tsfm_forecasting.
+        target_column: Which forecasted column to check (e.g. 'Capacity').
+        failure_threshold: Value at which the asset is considered failed.
+        direction: 'below' if failure = metric drops below threshold
+            (e.g. capacity fade), 'above' if failure = metric rises above
+            threshold (e.g. resistance growth).
+    """
+    # Normalize direction — the planner LLM may pass variations
+    direction = direction.strip().lower()
+    if direction in ("below", "down", "decreasing", "drop", "fade"):
+        direction = "below"
+    elif direction in ("above", "up", "increasing", "rise", "growth", "spike"):
+        direction = "above"
+    else:
+        direction = "below"  # safe default for degradation metrics
+
+    try:
+        with open(forecast_results_file, "r") as fh:
+            forecast_data = json.load(fh)
+    except Exception as exc:
+        return ErrorResult(error=f"Could not read forecast file: {exc}")
+
+    target_columns = forecast_data.get("target_columns", [])
+    if target_column not in target_columns:
+        return ErrorResult(
+            error=f"target_column '{target_column}' not in forecast columns: {target_columns}"
+        )
+
+    col_idx = target_columns.index(target_column)
+    predictions = np.array(forecast_data["target_prediction"])
+    timestamps = forecast_data.get("timestamp", [])
+
+    if predictions.ndim < 2:
+        return ErrorResult(error="Unexpected prediction array shape")
+
+    # predictions shape: [n_windows, forecast_horizon, n_targets]
+    # Use the last window's predictions (most recent forecast)
+    last_window = predictions[-1]  # shape: [forecast_horizon, n_targets]
+    if last_window.ndim == 1:
+        forecast_values = last_window
+    else:
+        forecast_values = last_window[:, col_idx]
+
+    current_value = float(forecast_values[0])
+
+    # Find first step crossing the threshold
+    crossing_step = None
+    for step_idx, val in enumerate(forecast_values):
+        if direction == "below" and val <= failure_threshold:
+            crossing_step = step_idx
+            break
+        elif direction == "above" and val >= failure_threshold:
+            crossing_step = step_idx
+            break
+
+    failure_timestamp = None
+    if crossing_step is not None and timestamps:
+        last_timestamps = timestamps[-1] if timestamps else []
+        if crossing_step < len(last_timestamps):
+            failure_timestamp = str(last_timestamps[crossing_step])
+
+    if crossing_step is not None:
+        msg = (
+            f"{target_column} is predicted to cross {failure_threshold} "
+            f"({direction}) at forecast step {crossing_step}. "
+            f"Current value: {current_value:.4f}."
+        )
+    else:
+        # Threshold not reached within forecast horizon — extrapolate
+        if len(forecast_values) >= 2:
+            slope = float(forecast_values[-1] - forecast_values[0]) / len(forecast_values)
+            if slope != 0:
+                remaining = failure_threshold - float(forecast_values[-1])
+                extra_steps = int(remaining / slope)
+                if extra_steps > 0:
+                    crossing_step = len(forecast_values) + extra_steps
+                    msg = (
+                        f"{target_column} does not cross {failure_threshold} within "
+                        f"the forecast horizon ({len(forecast_values)} steps). "
+                        f"Linear extrapolation estimates ~{crossing_step} total steps. "
+                        f"Current value: {current_value:.4f}."
+                    )
+                else:
+                    msg = (
+                        f"{target_column} trend does not move toward {failure_threshold}. "
+                        f"Current value: {current_value:.4f}."
+                    )
+            else:
+                msg = (
+                    f"{target_column} is flat within the forecast horizon. "
+                    f"Current value: {current_value:.4f}."
+                )
+        else:
+            msg = (
+                f"Insufficient forecast data to estimate remaining life. "
+                f"Current value: {current_value:.4f}."
+            )
+
+    return RULResult(
+        status="success",
+        target_column=target_column,
+        current_value=current_value,
+        failure_threshold=failure_threshold,
+        direction=direction,
+        estimated_remaining_steps=crossing_step,
+        estimated_failure_timestamp=failure_timestamp,
+        message=msg,
+    )
+
+
+# ── Sensitivity analysis ─────────────────────────────────────────────────────
+
+
+@mcp.tool()
+def analyze_sensitivity(
+    dataset_path: str,
+    target_column: str,
+    condition_column: str,
+    id_column: Optional[str] = None,
+    id_value: Optional[str] = None,
+    n_bins: int = 5,
+) -> Union[SensitivityResult, ErrorResult]:
+    """Analyze how a condition variable affects a target metric.
+
+    Bins data by condition_column quantiles and computes target statistics
+    per bin. Returns per-bin summaries and Pearson correlation. Useful for
+    environmental sensitivity analysis and sensor importance ranking.
+
+    Args:
+        dataset_path: Path to dataset (CSV/JSON/XLSX).
+        target_column: The metric to analyze (e.g. 'Capacity').
+        condition_column: The variable to test (e.g. 'ambient_temperature').
+        id_column: Optional column to filter by entity (e.g. 'asset_id').
+        id_value: Entity to analyze (e.g. 'B0025').
+        n_bins: Number of quantile bins for the condition variable.
+    """
+    from scipy import stats
+
+    if not dataset_path.strip():
+        return ErrorResult(error="dataset_path is required")
+
+    dataset_path = _get_dataset_path(dataset_path)
+    try:
+        df = _read_ts_data(dataset_path)
+    except Exception as exc:
+        return ErrorResult(error=f"Could not read dataset: {exc}")
+
+    if target_column not in df.columns:
+        return ErrorResult(
+            error=f"target_column '{target_column}' not in dataset columns: {list(df.columns)}"
+        )
+    if condition_column not in df.columns:
+        return ErrorResult(
+            error=f"condition_column '{condition_column}' not in dataset columns: {list(df.columns)}"
+        )
+
+    if id_column and id_value:
+        if id_column not in df.columns:
+            return ErrorResult(error=f"id_column '{id_column}' not in dataset")
+        df = df[df[id_column] == id_value]
+        if df.empty:
+            return ErrorResult(error=f"No data found for {id_column}='{id_value}'")
+
+    df = df[[target_column, condition_column]].dropna()
+    if len(df) < n_bins:
+        return ErrorResult(
+            error=f"Insufficient data ({len(df)} rows) for {n_bins} bins"
+        )
+
+    df[target_column] = pd.to_numeric(df[target_column], errors="coerce")
+    df[condition_column] = pd.to_numeric(df[condition_column], errors="coerce")
+    df = df.dropna()
+
+    try:
+        df["bin"] = pd.qcut(df[condition_column], q=n_bins, duplicates="drop")
+    except ValueError as exc:
+        return ErrorResult(error=f"Could not create bins: {exc}")
+
+    bins = []
+    for bin_label, group in df.groupby("bin", observed=True):
+        bins.append(
+            SensitivityBin(
+                bin_label=str(bin_label),
+                condition_mean=float(group[condition_column].mean()),
+                target_mean=float(group[target_column].mean()),
+                target_std=float(group[target_column].std()) if len(group) > 1 else 0.0,
+                n_samples=len(group),
+            )
+        )
+
+    corr, p_val = stats.pearsonr(df[condition_column], df[target_column])
+
+    return SensitivityResult(
+        status="success",
+        target_column=target_column,
+        condition_column=condition_column,
+        bins=bins,
+        correlation=float(corr),
+        p_value=float(p_val),
+        message=(
+            f"Pearson correlation between {condition_column} and {target_column}: "
+            f"r={corr:.4f}, p={p_val:.4g}. Analyzed {len(df)} observations in {len(bins)} bins."
         ),
     )
 

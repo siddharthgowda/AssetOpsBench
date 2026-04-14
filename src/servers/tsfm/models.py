@@ -81,6 +81,7 @@ class TSFMModelsResult(BaseModel):
 class ForecastingResult(BaseModel):
     status: str
     results_file: str
+    performance: Optional[Any] = None
     dataquality_summary: Optional[Any] = None
     message: str
 
@@ -98,4 +99,33 @@ class TSADResult(BaseModel):
     total_records: int
     anomaly_count: int
     columns: List[str]
+    message: str
+
+
+class RULResult(BaseModel):
+    status: str
+    target_column: str
+    current_value: float
+    failure_threshold: float
+    direction: str
+    estimated_remaining_steps: Optional[int] = None
+    estimated_failure_timestamp: Optional[str] = None
+    message: str
+
+
+class SensitivityBin(BaseModel):
+    bin_label: str
+    condition_mean: float
+    target_mean: float
+    target_std: float
+    n_samples: int
+
+
+class SensitivityResult(BaseModel):
+    status: str
+    target_column: str
+    condition_column: str
+    bins: List[SensitivityBin]
+    correlation: float
+    p_value: float
     message: str
