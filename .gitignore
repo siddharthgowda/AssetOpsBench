@@ -201,3 +201,13 @@ mcp/couchdb/sample_data/bulk_docs.json
 .env
 mcp/servers/tsfm/artifacts/tsfm_models/
 src/tmp/
+
+# Battery data and pretrained models (local only, not checked in)
+.data/
+.pretrained/
+.BatteryLife/
+.PBTs/
+.prediction_of_battery/
+
+# Standard layout for external (downloaded) artifacts — weights, norms, datasets
+external/

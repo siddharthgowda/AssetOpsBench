@@ -31,6 +31,7 @@ DEFAULT_SERVER_PATHS: dict[str, Path | str] = {
     "tsfm": "tsfm-mcp-server",
     "wo": "wo-mcp-server",
     "vibration": "vibration-mcp-server",
+    "battery": "battery-mcp-server",
 }
 
 _PLACEHOLDER_RE = re.compile(r"\{step_(\d+)\}")

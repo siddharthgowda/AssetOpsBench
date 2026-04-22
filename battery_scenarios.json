@@ -1,0 +1,107 @@
+[
+  {
+    "id": 1,
+    "persona": "Commercial EV Fleet Operator",
+    "focus": "Capacity Fade & EOL",
+    "motivation": "Preventing stranded assets in commercial logistics and optimizing replacement schedules.",
+    "query": "We operate a dense urban fleet of L3 and L5 electric cargo vehicles, and our drivers frequently push the packs to their limits. I have a batch of historical run-to-failure cycle data for our cells. I need you to predict the Remaining Useful Life (RUL) for all these test cells until they hit a critical 30% capacity fade threshold (1.4 Ah). Cross-verify these predictions against the actual cycle outcomes we recorded, and give me a critical risk list of the 12 batteries closest to total failure. I need to see the MAE and RMSE for these end-of-life predictions, alongside the capacity degradation curves for those top 12, so I can justify our upcoming Q3 battery replacement budget."
+  },
+  {
+    "id": 2,
+    "persona": "BMS Hardware Engineer",
+    "focus": "Impedance & Deep Discharge",
+    "motivation": "Validating safety systems and preventing thermal events during aggressive duty cycles.",
+    "query": "Our engineering team is validating a new Battery Management System (BMS) meant to handle aggressive, deep-discharge scenarios, sometimes dropping below the OEM's 2.7V safety threshold. I need AssetsOpsBench to ingest our raw Electrochemical Impedance Spectroscopy (EIS) parameters (specifically estimated electrolyte and charge transfer resistance) alongside the temperature data. Predict the precise End-of-Discharge (EOD) time for the cells undergoing these deep discharge profiles. Show me the voltage drop curves for the 5 cells exhibiting the most severe internal resistance spikes, and back it up with the MAE and RMSE metrics. We have a sprint review on Thursday, and I need hard data to prove our new thermal throttling logic is triggering at the right time."
+  },
+  {
+    "id": 3,
+    "persona": "Warranty & Risk Analyst",
+    "focus": "Cycle Variability & State-of-Life",
+    "motivation": "Managing financial exposure from unpredictable degradation rates.",
+    "query": "We are dealing with a massive influx of warranty claims because no two battery cells in our field systems have the same State-of-Life (SOL), erratic variations in depth-of-discharge and rest periods are causing unpredictable aging. I have aging data from a highly varied test group. Predict the true RUL across this entire dataset and validate your predictions against the actual failure timelines to prove your model can handle intrinsic variability. Isolate the top 10% of cells that degraded significantly faster than the baseline, and plot their performance drop-off. Give me the overall MAE and RMSE numbers so I can show the financial risk committee exactly how accurate our new warranty forecasting model will be."
+  },
+  {
+    "id": 4,
+    "persona": "Power Electronics Architect",
+    "focus": "Thermal & Charging Profiles",
+    "motivation": "Validating the thermal efficiency of next-generation chargers and preventing accelerated aging during fast-charge cycles.",
+    "query": "We are designing high-efficiency power electronics for fast-charging infrastructure, and we need to understand how aggressive charging impacts cell temperatures. Using our historical charge cycle data, analyze the correlation between charge current, charge voltage, and measured cell temperature. Predict the temperature curves for the cells undergoing the highest current loads. I need to see the predicted vs. actual thermal peaks, and calculate the RMSE for these temperature predictions. Show me the 5 cells that experienced the highest thermal stress so our engineering team can adjust the current-throttling algorithms before we finalize the hardware design."
+  },
+  {
+    "id": 5,
+    "persona": "Edge AI Prognostics Developer",
+    "focus": "Lightweight Model Deployment",
+    "motivation": "Ensuring that predictive models are efficient enough to run locally on resource-constrained devices without cloud latency.",
+    "query": "Our goal is to deploy battery prognostics directly onto local edge devices for real-time monitoring. I need to know if AssetsOpsBench can generate lightweight Remaining Useful Life (RUL) models. Take our 10Hz raw time-series testbed data and train a predictive model targeting a 30% capacity fade criteria. Run an inference test on a subset of these cells and give me the MAE and the inference execution time. Plot the predicted RUL trajectory against the actual recorded degradation. I need to prove to my team that we can get high-accuracy RUL numbers locally without massive computational overhead."
+  },
+  {
+    "id": 6,
+    "persona": "Autonomous Delivery Fleet Manager",
+    "focus": "Unpredictable Rest Periods",
+    "motivation": "Maximizing uptime for service robots that have highly erratic usage and charging schedules.",
+    "query": "Our delivery robots operate on chaotic schedules, sometimes they run continuous deep discharges, and other times they sit idle for hours. I have operational profiles with massive variations in rest periods and intrinsic cell variability. I need you to ingest this full operational profile (charge, discharge, and rest time vectors) and predict the End-of-Discharge (EOD) for the next 10 upcoming cycles across this varied group. Give me the MAE for these short-term EOD predictions. My dispatchers need a dashboard showing the exact minute each robot will hit its voltage threshold so we stop leaving bots stranded on the sidewalk."
+  },
+  {
+    "id": 7,
+    "persona": "Supply Chain & Logistics Director",
+    "focus": "Fleet Availability & Planning",
+    "motivation": "Preventing logistics bottlenecks by ensuring long-term asset availability and accurate procurement.",
+    "query": "We run a massive logistics and supply chain operation, and unexpected asset downtime destroys our margins. I do not need deep engineering data; I need high-level fleet readiness. Look at our historical run-to-failure cycle data and predict the calendar date (or cycle number) when every single cell will hit its defined end-of-life threshold. Rank the entire fleet by RUL, highlight the 20 units that need to be procured and replaced in the next 30 days, and provide the overall accuracy metrics (MAE/RMSE) for the fleet. I am taking this to the procurement VP to lock in our Q4 battery orders."
+  },
+  {
+    "id": 8,
+    "persona": "Auxiliary Controller Designer",
+    "focus": "Low-Voltage System Reliability",
+    "motivation": "Guaranteeing that low-voltage auxiliary systems (like steering or critical sensors) do not lose power during deep vehicle discharges.",
+    "query": "My team builds auxiliary controllers that require a strict minimum voltage to function safely. I have test data where cells were pushed into deep discharge below the OEM 2.7V threshold to simulate extreme field conditions. Analyze these deep discharge cycles and predict the exact time vector when the measured voltage drops past 2.9V, 2.8V, and 2.7V for each cell. Compare your predictions to the actual recorded time vectors. I need the MAE for these specific voltage milestones and a visualization of the voltage drop-off curve for the 8 worst-performing cells so we can design our low-voltage cutoffs properly."
+  },
+  {
+    "id": 9,
+    "persona": "Battery Cell Quality Assurance Lead",
+    "focus": "Manufacturing Defects",
+    "motivation": "Identifying bad batches of cells early to avoid costly recalls and maintain brand reputation.",
+    "query": "Even out of the factory, no two cells are identical, but we need to catch the outliers fast. Using our accelerated testbed data, establish a baseline degradation curve for a standard cell batch. Then, run an anomaly detection prediction to identify which cells are degrading significantly faster than the baseline due to intrinsic manufacturing variability. Flag the top 5% of cells that deviate from the standard State-of-Life (SOL) curve early in their cycle life. Show me the divergence graphs and the error margins. I need to prove to the manufacturing floor that we can spot defective cells within the first 50 cycles."
+  },
+  {
+    "id": 10,
+    "persona": "Environmental Chamber Test Engineer",
+    "focus": "Ambient Temperature Impact",
+    "motivation": "Understanding how extreme climates degrade battery life to tailor geographic warranties.",
+    "query": "We are preparing to launch assets in extreme weather markets. We've run accelerated aging tests at different ambient temperature levels to simulate these climates. I need AssetsOpsBench to isolate the impact of ambient temperature on the rate of capacity fade. Predict the RUL for the cells tested at high temperatures versus those at room temperature. Give me the comparative RMSE for both groups and plot a comparative degradation curve showing how much faster the high-temp cells hit their end-of-life criteria. This data will dictate our warranty policies in desert climates."
+  },
+  {
+    "id": 11,
+    "persona": "Microgrid Storage Operator",
+    "focus": "Second-Life Battery Viability",
+    "motivation": "Assessing whether heavily degraded EV batteries can be safely repurposed for stationary grid storage.",
+    "query": "We buy degraded battery packs that have already hit a 30% capacity fade for use in stationary microgrids. We need to know how they behave after extensive aging. We have impedance data for cells right as they approach their automotive end-of-life criteria. Predict how the internal resistance will trend over the next 20 simulated cycles. Provide the accuracy metrics for your resistance predictions and flag any cells where the predicted charge transfer resistance spikes exponentially. I need to know which cells are safe for second-life storage and which are fire hazards."
+  },
+  {
+    "id": 12,
+    "persona": "Fleet Safety Officer",
+    "focus": "Early Warning of Internal Shorts",
+    "motivation": "Preventing catastrophic thermal runaway events before they happen.",
+    "query": "Safety is our primary mandate. We cannot wait for a voltage drop to tell us a battery is failing; we need leading indicators. Analyze our historical Electrochemical Impedance Spectroscopy (EIS) operations. Predict the trajectory of the estimated electrolyte resistance for all test cells. Set an alert threshold for rapid increases in resistance, and identify which cells crossed that threshold before their capacity completely faded. Show me the predicted vs. actual resistance curves and the overall MAE. If we can predict an internal short days before it happens, it will save lives."
+  },
+  {
+    "id": 13,
+    "persona": "Used Asset Assessor",
+    "focus": "Residual Value Estimation",
+    "motivation": "Accurately pricing second-hand electric assets based on their true remaining battery health.",
+    "query": "We acquire hundreds of used electric assets daily, and we only have time to run a quick partial-cycle test on them. Take only the first 25% of the charge/discharge cycles from a historical test batch. Based purely on that limited data, predict their final Remaining Useful Life (RUL) and when they will hit their total capacity fade mark. Compare these partial-data predictions against the actual ground truth from the full test lifecycle. I need the MAE and RMSE to see if your platform can accurately value a used asset without running a full multi-day diagnostic."
+  },
+  {
+    "id": 14,
+    "persona": "Laboratory Instrumentation Engineer",
+    "focus": "Sensor Drift & Calibration",
+    "motivation": "Ensuring the physical testing equipment and DAQ systems remain calibrated over long run-to-failure experiments.",
+    "query": "When running continuous run-to-failure tests, our sensors sometimes drift. I need to validate our testbed data integrity. Compare the raw computed battery impedance against the calibrated, smoothed impedance data we've recorded. Build a model to predict the expected rectified impedance based on voltage and temperature measurements, and highlight any cycles where the raw data drastically deviates from your prediction. Give me the RMSE of your model. I need to prove to the lab director that our digital twin can automatically detect hardware sensor calibration issues."
+  },
+  {
+    "id": 15,
+    "persona": "Predictive Maintenance Consultant",
+    "focus": "Model Benchmarking",
+    "motivation": "Proving to clients that their proprietary algorithms outperform standard baseline models.",
+    "query": "We are pitching a new predictive maintenance contract and need to prove our models are the best. I want AssetsOpsBench to generate a baseline RUL prediction using only capacity metrics from standard discharge cycles. Then, generate an advanced RUL prediction using a multi-variate approach that incorporates capacity, measured temperature, and internal resistance data. Display a side-by-side comparison of the MAE and RMSE for both models across the entire test group, and show me the degradation curves for the 10 most volatile cells. I need hard proof that ingesting complex multi-dimensional data significantly improves prediction accuracy over basic baseline models."
+  }
+]

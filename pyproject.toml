@@ -34,6 +34,7 @@ fmsr-mcp-server = "servers.fmsr.main:main"
 tsfm-mcp-server = "servers.tsfm.main:main"
 wo-mcp-server = "servers.wo.main:main"
 vibration-mcp-server = "servers.vibration.main:main"
+battery-mcp-server = "servers.battery.main:main"
 
 
 [dependency-groups]
@@ -49,6 +50,15 @@ tsfm = [
     "torch>=2.0",
     "transformers>=4.40,<4.58",
     "huggingface-hub>=0.34,<1.0",
+]
+# Optional heavy deps for the battery server (acctouhou pretrained TF/Keras model).
+# Acctouhou's .h5 weights were saved with Keras 2 (TF 2.2-era) and can't be deserialized
+# by Keras 3. We install tf_keras (the legacy Keras 2 package) alongside TF 2.16+ and
+# set TF_USE_LEGACY_KERAS=1 at import time. This is the supported migration path.
+battery = [
+    "tensorflow>=2.16",
+    "tf_keras>=2.16",
+    "scikit-learn>=1.3",
 ]
 
 [tool.uv]

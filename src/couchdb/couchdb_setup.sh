@@ -49,17 +49,20 @@ else
   echo "⚠️ $VIBRATION_FILE not found, skipping vibration data."
 fi
 
-# Load battery aging data (NASA Li-ion cycling) into a dedicated database
-BATTERY_FILE="/sample_data/iot/battery_test_subset.json"
-if [ -f "$BATTERY_FILE" ]; then
-  echo "Loading battery data..."
+# Load battery cycling data (NASA Li-ion B0xx cells) into a dedicated database.
+# Uses init_battery.py which reads flat directory of B*.json files and applies
+# subset filter via BATTERY_CELL_SUBSET env var (default: 14 cells for prototyping).
+BATTERY_DATA_DIR_CONTAINER="/sample_data/battery_nasa"
+if [ -d "$BATTERY_DATA_DIR_CONTAINER" ]; then
+  echo "Loading battery NASA cycling data..."
   COUCHDB_URL="http://localhost:5984" \
-    python3 /couchdb/init_asset_data.py \
-      --data-file "$BATTERY_FILE" \
+    BATTERY_DATA_DIR="$BATTERY_DATA_DIR_CONTAINER" \
+    python3 /couchdb/init_battery.py \
+      --data-dir "$BATTERY_DATA_DIR_CONTAINER" \
       --db "${BATTERY_DBNAME:-battery}" \
       --drop
 else
-  echo "⚠️ $BATTERY_FILE not found, skipping battery data."
+  echo "⚠️ $BATTERY_DATA_DIR_CONTAINER not found, skipping battery data."
 fi
 
 echo "✅ All databases initialised."

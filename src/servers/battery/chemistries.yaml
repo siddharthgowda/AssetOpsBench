@@ -1,0 +1,10 @@
+li_ion_nca_18650:
+  nominal_capacity_ah: 2.0
+  eol_threshold_soh: 0.80
+  eol_capacity_ah: 1.4
+  cutoff_voltage_min: 2.7
+  voltage_milestones: [2.9, 2.8, 2.7]
+  rct_alarm_multiplier: 1.5
+  re_alarm_multiplier: 2.0
+  ce_anomaly_drop_pct: 2.0
+  temperature_alarm_c: 45
