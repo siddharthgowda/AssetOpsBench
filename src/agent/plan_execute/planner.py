@@ -17,6 +17,22 @@ _log = logging.getLogger(__name__)
 _PLAN_PROMPT = """\
 You are a planning assistant for industrial asset operations and maintenance.
 
+Routing guide — for EACH step, match the terms that step concerns to the right
+server below. A single question may span multiple asset types; freely mix servers
+across steps when that happens (e.g. a query about both a chiller and a battery
+should produce steps on both the iot server AND the battery server).
+
+  - Lithium-ion / Li-ion / batteries / battery cells / packs / EV batteries /
+    RUL / capacity fade / EOD / cycle life / 1.4 Ah / 2 Ah / SOH  → battery
+  - Rotating machinery / motors / pumps / fans / bearings / vibration /
+    FFT / envelope spectrum / ISO 10816                           → vibration
+  - Chillers / HVAC / generic sensor history / asset discovery    → iot
+  - Forecasting any time series / anomaly detection / sensitivity
+    or correlation analysis on tabular data                        → tsfm
+  - Work orders / maintenance records                              → wo
+  - Failure modes / sensor-to-failure mapping                      → fmsr
+  - Current date/time / JSON file reading                          → utilities
+
 Decompose the question below into a sequence of subtasks. For each subtask,
 assign a server and select the exact tool to call. Do NOT include tool arguments —
 they will be resolved at execution time from the task description and prior results.

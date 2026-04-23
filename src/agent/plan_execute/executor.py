@@ -34,6 +34,38 @@ DEFAULT_SERVER_PATHS: dict[str, Path | str] = {
     "battery": "battery-mcp-server",
 }
 
+# One-line asset-type header shown to the planner before each server's tool list.
+# Helps the planner route questions to the right server based on vocabulary in
+# the query (e.g. "batteries", "cells", "RUL" → battery; "chiller", "HVAC" → iot).
+# Planner is free to mix servers across steps — see planner.py prompt.
+_SERVER_DESCRIPTIONS: dict[str, str] = {
+    "iot": (
+        "General industrial IoT sensor access — site/asset discovery, sensor listing, "
+        "and time-series history for chillers, HVAC, and generic industrial assets."
+    ),
+    "utilities": "Generic helpers: current date/time, English time formatting, JSON file reading.",
+    "fmsr": (
+        "Failure-mode and sensor reasoning — list failure modes for an asset type and "
+        "map sensors to failure modes."
+    ),
+    "tsfm": (
+        "Generic time-series foundation-model forecasting, fine-tuning, anomaly detection, "
+        "and quantitative sensitivity/correlation analysis on tabular time-series data."
+    ),
+    "wo": "Work-order / maintenance-record search.",
+    "vibration": (
+        "Rotating-machinery vibration analysis — FFT, envelope spectrum, bearing fault "
+        "frequencies, ISO 10816 severity classification, and full diagnosis for motors, "
+        "pumps, fans, and other rotating assets."
+    ),
+    "battery": (
+        "Lithium-ion (Li-ion) battery cell analytics — RUL prediction, capacity-fade "
+        "curves, end-of-discharge voltage timing, impedance (Rct/Re) growth, fleet "
+        "outlier detection, and full Li-ion cell diagnosis. Use for anything about "
+        "batteries, cells, packs, EV batteries, EOL, or capacity fade."
+    ),
+}
+
 _PLACEHOLDER_RE = re.compile(r"\{step_(\d+)\}")
 
 _ARG_RESOLUTION_PROMPT = """\
@@ -70,12 +102,20 @@ class Executor:
         )
 
     async def get_server_descriptions(self) -> dict[str, str]:
-        """Query each registered MCP server and return formatted tool signatures."""
+        """Query each registered MCP server and return formatted tool signatures.
+
+        Each server's block is prefixed with a one-line asset-type header (from
+        _SERVER_DESCRIPTIONS) so the planner can route query terms to the
+        correct server on a per-step basis.
+        """
         descriptions: dict[str, str] = {}
         for name, path in self._server_paths.items():
             try:
                 tools = await _list_tools(path)
                 lines = []
+                header = _SERVER_DESCRIPTIONS.get(name)
+                if header:
+                    lines.append(f"  # {header}")
                 for t in tools:
                     params = ", ".join(
                         f"{p['name']}: {p['type']}{'?' if not p['required'] else ''}"
