@@ -28,9 +28,16 @@ from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel
 
+from . import model_wrapper
 from .couchdb_client import CouchDBClient
-from .model_wrapper import _CACHE, _MODEL_AVAILABLE, _load_once, precompute_cell
+from .model_wrapper import _CACHE, _load_once, precompute_cell
 from .preprocessing import preprocess_cell_from_couchdb
+
+
+def _model_available() -> bool:
+    """Live accessor — `from module import flag` captures at import time and
+    won't see the flag flip to True inside `_load_once()`."""
+    return model_wrapper._MODEL_AVAILABLE
 
 load_dotenv()
 
@@ -119,7 +126,7 @@ def _boot() -> None:
     if not client.available:
         logger.warning("CouchDB unavailable — battery tools will return errors until DB is reachable")
         return
-    if not _MODEL_AVAILABLE:
+    if not _model_available():
         logger.warning(
             "Pretrained model unavailable — only statistical tools will work. "
             "Check BATTERY_MODEL_WEIGHTS_DIR and BATTERY_NORMS_DIR."
@@ -217,11 +224,11 @@ def predict_rul(
     lithium-ion cell. Use this when the user asks for RUL, cycles-to-failure, EOL
     timing, at-risk rankings, warranty analysis, or second-life assessment. Returns
     MAE vs ground truth when the cell has complete NASA history."""
-    if not _MODEL_AVAILABLE:
+    if not _model_available():
         return ErrorResult(
             error=(
-                "Pretrained model unavailable. See src/servers/battery/README.md "
-                "for weight/norm download instructions."
+                "Pretrained model unavailable. See battery.md (repo root) for "
+                "weight/norm setup, or run scripts/setup_battery_artifacts.sh."
             )
         )
     entry = _CACHE.get(asset_id)
@@ -252,7 +259,7 @@ def predict_voltage_curve(
     """Predict the 500-point voltage-vs-SOC discharge curve for a lithium-ion cell at a
     given cycle. Use this when the user asks for voltage trajectories, discharge
     profiles, V-SOC curves, or end-of-discharge visualization at a specific cell age."""
-    if not _MODEL_AVAILABLE:
+    if not _model_available():
         return ErrorResult(error="Pretrained model unavailable")
     entry = _CACHE.get(asset_id)
     if not entry:
@@ -275,7 +282,7 @@ def predict_voltage_milestones(
     threshold (EOD timing). Use this when the user asks about BMS alarms, end-of-discharge
     prediction, deep-discharge events, or 'when will voltage drop below X'. Default
     thresholds target auxiliary-system cutoffs at 2.9/2.8/2.7V."""
-    if not _MODEL_AVAILABLE:
+    if not _model_available():
         return ErrorResult(error="Pretrained model unavailable")
     entry = _CACHE.get(asset_id)
     if not entry:

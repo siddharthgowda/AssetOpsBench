@@ -14,11 +14,30 @@ from __future__ import annotations
 import logging
 import os
 import time
+from pathlib import Path
 from typing import Any
+
+# Silence TensorFlow's cosmetic boot-time warnings before any TF import.
+# TF_CPP_MIN_LOG_LEVEL=3 suppresses INFO/WARNING/ERROR from the C++ layer
+# (including the "mixed_float16 may run slowly" message which is purely
+# hypothetical — we force float32 at load time).
+os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
+os.environ.setdefault("TF_ENABLE_ONEDNN_OPTS", "0")  # extra noise suppression
 
 import numpy as np
 
 logger = logging.getLogger("battery-mcp-server")
+
+# Repo root: src/servers/battery/model_wrapper.py → src/servers/battery → src/servers → src → repo
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+
+
+def _resolve_path(p: str) -> Path:
+    """Resolve relative env-var paths against the repo root, not CWD."""
+    path = Path(p)
+    if not path.is_absolute():
+        path = (_REPO_ROOT / path).resolve()
+    return path
 
 # Module-level state (populated by _load_once)
 _CACHE: dict[str, dict[str, Any]] = {}
@@ -62,13 +81,56 @@ def _load_once() -> None:
     global _MODELS, _NORMS, _MODEL_AVAILABLE
     if _MODELS is not None:
         return
-    weights_dir = os.environ.get("BATTERY_MODEL_WEIGHTS_DIR", "external/battery/acctouhou/weights")
-    norms_dir = os.environ.get("BATTERY_NORMS_DIR", "external/battery/acctouhou/norms")
+    weights_dir = _resolve_path(
+        os.environ.get("BATTERY_MODEL_WEIGHTS_DIR", "external/battery/acctouhou/weights")
+    )
+    norms_dir = _resolve_path(
+        os.environ.get("BATTERY_NORMS_DIR", "external/battery/acctouhou/norms")
+    )
+
+    # Explicit file-level precheck so the user sees WHICH file is actually missing
+    # instead of a generic "module not found" style message from tf.
+    required_weights = ["feature_selector_ch.h5", "feature_selector_dis.h5", "predictor.h5", "predictor2.h5"]
+    required_norms = ["charge_norm.npy", "discharge_norm.npy", "summary_norm.npy", "predict_renorm.npy"]
+    missing: list[str] = []
+    for f in required_weights:
+        p = weights_dir / f
+        if not p.exists():
+            missing.append(str(p))
+    for f in required_norms:
+        p = norms_dir / f
+        if not p.exists():
+            missing.append(str(p))
+    if missing:
+        logger.warning(
+            "Battery pretrained model unavailable. Missing files:\n  %s\n"
+            "  weights_dir=%s\n  norms_dir=%s\n"
+            "Fix: update BATTERY_MODEL_WEIGHTS_DIR and BATTERY_NORMS_DIR in .env, "
+            "or run scripts/setup_battery_artifacts.sh to diagnose.",
+            "\n  ".join(missing),
+            weights_dir,
+            norms_dir,
+        )
+        return
+
     try:
         # Lazy imports — keep the server bootable even without TF/tf_keras installed.
         # tf_keras is Keras 2 (legacy), required because acctouhou's .h5 weights
         # were saved with Keras 2 and Keras 3 can't deserialize them.
+        import tensorflow as tf
         import tf_keras  # noqa: F401
+
+        # The acctouhou weights were saved with a mixed_float16 dtype policy,
+        # which runs *slowly* on CPU and emits a noisy warning. If no GPU is
+        # visible, force a float32 global policy before loading. This also
+        # matters for portability: users on any CPU (Linux / Windows / Apple
+        # Silicon) should get a clean boot.
+        gpus = tf.config.list_physical_devices("GPU")
+        if not gpus:
+            tf_keras.mixed_precision.set_global_policy("float32")
+            logger.info("No GPU detected; using float32 global dtype policy")
+        else:
+            logger.info("Detected %d GPU(s); keeping default dtype policy", len(gpus))
 
         _MODELS = {
             "fs_ch": tf_keras.models.load_model(
@@ -101,10 +163,14 @@ def _load_once() -> None:
             "Battery model loaded: weights=%s, norms=%s", weights_dir, norms_dir
         )
     except Exception as e:  # noqa: BLE001
+        # Include full traceback so users see the actual root cause (version
+        # mismatch, deserializer error, etc.) instead of a one-line message.
         logger.warning(
-            "Battery pretrained model unavailable (%s). "
+            "Battery pretrained model failed to load (%s: %s). "
             "Statistical tools will still work.",
+            type(e).__name__,
             e,
+            exc_info=True,
         )
         _MODEL_AVAILABLE = False
 

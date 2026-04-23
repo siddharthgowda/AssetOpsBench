@@ -40,7 +40,14 @@ logger = logging.getLogger(__name__)
 # Defaults
 # ---------------------------------------------------------------------------
 
-_DEFAULT_DATA_DIR = os.environ.get("BATTERY_DATA_DIR", "external/battery/nasa")
+# Resolve the default data dir relative to the repo root (two levels up from
+# this script), NOT the current working directory. This way you can run the
+# script from anywhere: `python -m couchdb.init_battery` or directly.
+_SCRIPT_DIR = Path(__file__).resolve().parent
+_REPO_ROOT = _SCRIPT_DIR.parent.parent  # src/couchdb/ -> src/ -> repo root
+_DEFAULT_DATA_DIR = os.environ.get(
+    "BATTERY_DATA_DIR", str(_REPO_ROOT / "external" / "battery" / "nasa")
+)
 
 COUCHDB_URL = os.environ.get("COUCHDB_URL", "http://localhost:5984")
 COUCHDB_USERNAME = os.environ.get("COUCHDB_USERNAME", "admin")
@@ -168,13 +175,20 @@ def main() -> None:
     parser.add_argument("--drop", action="store_true", help="Drop and recreate if exists")
     args = parser.parse_args()
 
+    # Resolve relative data-dir paths against the repo root (the "external/..." default
+    # in .env is relative, but users may invoke this script from any directory).
+    data_dir = Path(args.data_dir)
+    if not data_dir.is_absolute():
+        data_dir = (_REPO_ROOT / data_dir).resolve()
+
     logger.info("CouchDB URL: %s", COUCHDB_URL)
     logger.info("Database: %s", args.db)
-    logger.info("Data dir: %s", args.data_dir)
+    logger.info("Data dir: %s", data_dir)
 
-    if not os.path.isdir(args.data_dir):
-        logger.error("Data dir not found: %s", args.data_dir)
+    if not data_dir.is_dir():
+        logger.error("Data dir not found: %s", data_dir)
         sys.exit(1)
+    args.data_dir = str(data_dir)
 
     subset_env = os.environ.get("BATTERY_CELL_SUBSET", _DEFAULT_SUBSET)
     subset = None if subset_env.strip().lower() == "all" else set(

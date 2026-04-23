@@ -273,13 +273,28 @@ def _make_stdio_params(server: Path | str) -> "StdioServerParameters":
     - str  → entry-point name; invoked as ``uv run <name>`` from the repo root.
     - Path → invoked as ``python -m module.path`` when under the repo root
              (supports relative imports), or directly otherwise.
+
+    Servers whose deps live in an optional ``[dependency-groups]`` block need
+    ``--group <name>`` passed to ``uv run``; otherwise ``uv`` resyncs the venv
+    without those deps before spawning the subprocess.
     """
     from mcp import StdioServerParameters
 
+    # Entry-point servers that need a specific uv dependency group.
+    _SERVER_GROUPS = {
+        "battery-mcp-server": "battery",
+        "tsfm-mcp-server": "tsfm",
+    }
+
     if isinstance(server, str):
+        args = ["run"]
+        group = _SERVER_GROUPS.get(server)
+        if group:
+            args.extend(["--group", group])
+        args.append(server)
         return StdioServerParameters(
             command="uv",
-            args=["run", server],
+            args=args,
             cwd=str(_REPO_ROOT),
         )
     try:
