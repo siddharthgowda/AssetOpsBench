@@ -148,11 +148,12 @@ _boot()
 
 
 @mcp.tool()
-def list_batteries(site_name: str = "MAIN") -> Union[BatteryListResult, ErrorResult]:
+def list_batteries(site_name: Optional[str] = None) -> Union[BatteryListResult, ErrorResult]:
     """List available lithium-ion battery cells for the fleet. Use this whenever the
     user asks about multiple cells, fleet rankings, top-N at-risk batteries, or
     when no specific cell_id is given — it is the entry point for most battery
     scenarios including RUL, voltage, impedance, and diagnosis queries."""
+    _ = site_name or "MAIN"  # reserved for future site-scoped fleets; CouchDB is flat today
     client = CouchDBClient()
     ids = client.list_cell_ids()
     if not ids:
@@ -218,7 +219,7 @@ def _ground_truth_rul(asset_id: str, from_cycle: int) -> Optional[float]:
 
 @mcp.tool()
 def predict_rul(
-    asset_id: str, from_cycle: int = 100
+    asset_id: str, from_cycle: int = 0
 ) -> Union[RULResult, ErrorResult]:
     """Predict remaining useful life (in cycles) to 30% capacity fade (1.4 Ah) for a
     lithium-ion cell. Use this when the user asks for RUL, cycles-to-failure, EOL
@@ -254,7 +255,7 @@ def predict_rul(
 
 @mcp.tool()
 def predict_voltage_curve(
-    asset_id: str, cycle_index: int
+    asset_id: str, cycle_index: int = 0
 ) -> Union[VoltageCurveResult, ErrorResult]:
     """Predict the 500-point voltage-vs-SOC discharge curve for a lithium-ion cell at a
     given cycle. Use this when the user asks for voltage trajectories, discharge
@@ -339,6 +340,23 @@ def analyze_impedance_growth(asset_id: str) -> Union[ImpedanceResult, ErrorResul
     )
 
 
+def _scalar_capacity(value: object) -> Optional[float]:
+    """Normalize NASA/CouchDB capacity to a float (some legacy docs use a list)."""
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, list) and value:
+        try:
+            return float(value[-1])
+        except (TypeError, ValueError):
+            return None
+    try:
+        return float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+
+
 @mcp.tool()
 def detect_capacity_outliers(
     asset_ids: Optional[list[str]] = None,
@@ -356,11 +374,12 @@ def detect_capacity_outliers(
     fade_rates: dict[str, float] = {}
     for cell in cells:
         dis = client.fetch_cycles(cell, cycle_type="discharge")
-        caps = [
-            (d.get("cycle_index", 0), d.get("data", {}).get("Capacity"))
-            for d in dis
-        ]
-        caps = [(i, c) for i, c in caps if c is not None]
+        caps = []
+        for d in dis:
+            raw_cap = d.get("data", {}).get("Capacity")
+            sc = _scalar_capacity(raw_cap)
+            if sc is not None:
+                caps.append((d.get("cycle_index", 0), sc))
         caps.sort(key=lambda x: x[0])
         if len(caps) < 2:
             continue

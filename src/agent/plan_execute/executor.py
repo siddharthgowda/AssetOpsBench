@@ -67,6 +67,7 @@ _SERVER_DESCRIPTIONS: dict[str, str] = {
 }
 
 _PLACEHOLDER_RE = re.compile(r"\{step_(\d+)\}")
+_ASSET_ID_RE = re.compile(r"\b(B\d{4})\b", re.IGNORECASE)
 
 _ARG_RESOLUTION_PROMPT = """\
 Generate the JSON arguments for the tool call below.
@@ -83,9 +84,137 @@ YOUR RESPONSE MUST BE A SINGLE RAW JSON OBJECT AND NOTHING ELSE.
 Do not write any explanation, reasoning, or prose — output only the JSON object.
 Use EXACTLY the parameter names listed in "Tool parameters" above.
 Use the task description and prior step results to determine the correct argument values.
-If a value comes from a list, use the first relevant element.
+If the task text names a specific asset_id (e.g. B0005), you MUST use exactly that ID.
+Do not substitute a different cell from a fleet list or pick another list element.
 
 JSON:"""
+
+_NONE_STEP_SYNTHESIS_PROMPT = """\
+You are synthesizing an intermediate answer for one plan step (no MCP tool call).
+
+Original user question: {question}
+
+Current step task: {task}
+
+Expected output rubric: {expected_output}
+
+Prior step results (use every step below; do not ignore earlier steps):
+{context}
+
+Instructions:
+- Ground your answer in numeric values and structured fields from the prior results (JSON or text).
+- When pairs of predicted vs actual (or baseline) numbers exist, compute MAE and/or RMSE explicitly.
+- Rank or filter lists using the criteria from the question and show the ordering keys.
+- If an upstream step failed or a metric cannot be computed, say so clearly — do not imply it was computed.
+- Be concrete; avoid vague boilerplate.
+
+Synthesis:"""
+
+
+def _format_context_lines(context: dict[int, StepResult]) -> str:
+    return "\n".join(
+        f"Step {n}: "
+        + (r.response if r.success else f"ERROR: {r.error}")
+        for n, r in sorted(context.items())
+    )
+
+
+def _enrich_resolved_args(task: str, tool: str, args: dict | None) -> dict:
+    """Fill common battery/tool args when the LLM omitted them but the task names an asset."""
+    out = dict(args) if args else {}
+    m = _ASSET_ID_RE.search(task)
+    asset_id = m.group(1).upper() if m else None
+    single_asset_tools = frozenset(
+        {
+            "predict_rul",
+            "get_battery_cycle_summary",
+            "predict_voltage_curve",
+            "predict_voltage_milestones",
+            "analyze_impedance_growth",
+            "diagnose_battery",
+        }
+    )
+    if tool == "predict_voltage_curve" and asset_id and not out.get("cycle_index"):
+        out["cycle_index"] = 0
+    if tool in single_asset_tools and asset_id and not out.get("asset_id"):
+        out["asset_id"] = asset_id
+    if tool == "list_batteries" and not out.get("site_name"):
+        out["site_name"] = "MAIN"
+    return _normalize_resolved_args(tool, out)
+
+
+def _normalize_resolved_args(tool: str, args: dict) -> dict:
+    """Coerce types so MCP JSON validation does not fail on LLM output."""
+    out = dict(args)
+    if tool == "predict_rul":
+        fc = out.get("from_cycle")
+        if isinstance(fc, str):
+            try:
+                out["from_cycle"] = int(float(fc.strip()))
+            except ValueError:
+                del out["from_cycle"]
+        elif fc is not None and not isinstance(fc, int):
+            try:
+                out["from_cycle"] = int(fc)
+            except (TypeError, ValueError):
+                del out["from_cycle"]
+    if tool == "predict_voltage_milestones":
+        th = out.get("thresholds")
+        if isinstance(th, str):
+            cleaned = th.strip().strip("[]")
+            try:
+                out["thresholds"] = [
+                    float(x.strip()) for x in cleaned.split(",") if x.strip()
+                ]
+            except ValueError:
+                del out["thresholds"]
+        elif isinstance(th, list):
+            try:
+                out["thresholds"] = [float(x) for x in th]
+            except (TypeError, ValueError):
+                del out["thresholds"]
+    if tool == "predict_voltage_curve":
+        ci = out.get("cycle_index")
+        if isinstance(ci, str):
+            try:
+                out["cycle_index"] = int(float(ci.strip()))
+            except ValueError:
+                del out["cycle_index"]
+        elif ci is not None and not isinstance(ci, int):
+            try:
+                out["cycle_index"] = int(ci)
+            except (TypeError, ValueError):
+                del out["cycle_index"]
+    return out
+
+
+def _omit_null_tool_args(args: dict) -> dict:
+    """Strip null/empty placeholders before MCP call — Pydantic rejects None or '' for typed fields."""
+    out: dict = {}
+    for k, v in args.items():
+        if v is None:
+            continue
+        if v == "":
+            continue
+        out[k] = v
+    return out
+
+
+def _tool_unavailable_response(exc: BaseException) -> str | None:
+    """Map missing optional deps (e.g. tsfm_public) to a structured JSON string."""
+    msg = str(exc).lower()
+    needles = (
+        "tsfm_public",
+        "modulenotfounderror",
+        "no module named",
+        "importerror",
+    )
+    if any(n in msg for n in needles):
+        return json.dumps(
+            {"status": "tool_unavailable", "reason": str(exc)},
+            ensure_ascii=False,
+        )
+    return None
 
 
 class Executor:
@@ -202,23 +331,50 @@ class Executor:
             )
 
         if not step.tool or step.tool.lower() in ("none", "null"):
+            if not context:
+                return StepResult(
+                    step_number=step.step_number,
+                    task=step.task,
+                    server=step.server,
+                    response=step.expected_output,
+                    tool=step.tool,
+                    tool_args=step.tool_args,
+                )
+            ctx_text = _format_context_lines(context)
+            syn_prompt = (
+                _NONE_STEP_SYNTHESIS_PROMPT.replace("{question}", question)
+                .replace("{task}", step.task)
+                .replace("{expected_output}", step.expected_output or "(none)")
+                .replace("{context}", ctx_text)
+            )
+            synthesized = self._llm.generate(syn_prompt)
             return StepResult(
                 step_number=step.step_number,
                 task=step.task,
                 server=step.server,
-                response=step.expected_output,
+                response=synthesized,
                 tool=step.tool,
                 tool_args=step.tool_args,
             )
 
+        resolved_args: dict = {}
         try:
             _log.info("Step %d: calling LLM to resolve args.", step.step_number)
             resolved_args = await _resolve_args_with_llm(
                 question, step.task, step.tool, tool_schema, context, self._llm
             )
+            resolved_args = _enrich_resolved_args(step.task, step.tool, resolved_args)
 
             t_tool = time.perf_counter()
-            response = await _call_tool(server_path, step.tool, resolved_args)
+            call_args = _omit_null_tool_args(resolved_args)
+            try:
+                response = await _call_tool(server_path, step.tool, call_args)
+            except BaseException as tool_exc:  # noqa: BLE001
+                payload = _tool_unavailable_response(tool_exc)
+                if payload is not None:
+                    response = payload
+                else:
+                    raise
             tool_call_duration_s = time.perf_counter() - t_tool
             return StepResult(
                 step_number=step.step_number,
@@ -226,7 +382,7 @@ class Executor:
                 server=step.server,
                 response=response,
                 tool=step.tool,
-                tool_args=resolved_args,
+                tool_args=call_args,
                 tool_call_duration_s=tool_call_duration_s,
             )
         except Exception as exc:  # noqa: BLE001
@@ -237,7 +393,7 @@ class Executor:
                 response="",
                 error=str(exc),
                 tool=step.tool,
-                tool_args=step.tool_args,
+                tool_args=_omit_null_tool_args(resolved_args),
             )
 
 
@@ -253,9 +409,7 @@ async def _resolve_args_with_llm(
     llm: LLMBackend,
 ) -> dict:
     """Generate tool arguments from the task description and prior step results."""
-    context_text = "\n".join(
-        f"Step {n}: {r.response}" for n, r in sorted(context.items())
-    )
+    context_text = _format_context_lines(context)
     prompt = (
         _ARG_RESOLUTION_PROMPT
         .replace("{question}", question)

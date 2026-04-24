@@ -33,6 +33,20 @@ should produce steps on both the iot server AND the battery server).
   - Failure modes / sensor-to-failure mapping                      → fmsr
   - Current date/time / JSON file reading                          → utilities
 
+For lithium-ion RUL, end-of-discharge timing, voltage milestones/crossings, capacity
+fade, impedance (Rct/Re), and fleet cell rankings, prefer battery server tools
+(predict_rul, predict_voltage_curve, predict_voltage_milestones, get_battery_cycle_summary,
+analyze_impedance_growth, detect_capacity_outliers, list_batteries, diagnose_battery)
+over TSFM tools unless the user explicitly asks for time-series forecasting, model
+fine-tuning, or generic tabular sensitivity — TSFM tools may be unavailable without
+extra setup.
+
+Do not plan a json_reader step for files that were not explicitly provided by the user
+as an uploaded file or a named path. If the user describes data only in prose, treat it
+as context for tool calls against live databases, not as a path on disk.
+
+When calling list_batteries with no site context from the user, use site_name='MAIN'.
+
 Decompose the question below into a sequence of subtasks. For each subtask,
 assign a server and select the exact tool to call. Do NOT include tool arguments —
 they will be resolved at execution time from the task description and prior results.
@@ -58,6 +72,26 @@ Rules:
 - Server and tool names must exactly match those listed above.
 - Dependencies use #S<N> notation (e.g., #S1, #S2). Use "None" if none.
 - Keep tasks specific and actionable.
+- When a question applies the same tool to multiple specific assets (e.g. 'for each
+  cell', 'top N cells', 'B0005 and B0006'), emit ONE STEP PER ASSET, each with the
+  asset_id named explicitly in that step's task description. Do not cover multiple
+  assets in a single step.
+- Do not use tool "none" as a placeholder before real data retrieval: for each asset,
+  call the actual battery (or other) MCP tool that returns data in the same step that
+  names the asset_id. Reserve tool "none" only for final synthesis or formatting when
+  all required numbers already appear in prior step results.
+- The #Server field must always be one of the listed server names (iot, utilities,
+  fmsr, tsfm, wo, vibration, battery). Never use the literal word "none" as #Server.
+  For steps with #Tool none, set #Server to utilities (or battery if synthesizing
+  only battery JSON results).
+- Never invent tool names: each #Tool value must match a tool listed under one of
+  the servers above, exactly as spelled.
+- The same one-step-per-asset rule applies to get_battery_cycle_summary and
+  analyze_impedance_growth: never use one vague step for "each cell" — one step per
+  B0xxx asset_id in the task line.
+- For MAE/RMSE or error metrics on battery voltage/EOD/RUL, derive them in a tool:none
+  synthesis step from numeric outputs of battery tools — do not call TSFM evaluation
+  or forecasting helpers unless that exact tool name appears in the server list.
 
 Question: {question}
 

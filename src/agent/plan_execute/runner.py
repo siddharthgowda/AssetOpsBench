@@ -34,8 +34,12 @@ Original question: {question}
 Step-by-step execution results:
 {results}
 
-Provide a concise, direct answer to the original question based on the results
-above. Do not repeat the individual steps — just give the final answer.
+Answer the original question using concrete values from the results (numbers, IDs,
+metrics). Where predicted and actual (or baseline) values both appear, compute MAE
+and/or RMSE when enough data exists. Rank or filter lists using the criteria from the
+question. If a step errored or a metric is missing (e.g. tool marked tool_unavailable),
+say so explicitly — do not claim you computed a metric that did not come from the results.
+Be concise; do not narrate the step list — give the final answer.
 """
 
 

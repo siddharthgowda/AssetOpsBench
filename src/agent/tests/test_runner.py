@@ -186,8 +186,8 @@ async def test_executor_get_server_descriptions(mock_llm):
 
 
 @pytest.mark.anyio
-async def test_executor_no_tool_step_skips_llm():
-    """tool=none must not trigger an LLM call for arg resolution."""
+async def test_executor_no_tool_step_skips_llm_when_no_prior_context():
+    """tool=none with no prior steps returns expected_output without an LLM call."""
     from pathlib import Path
 
     llm = _CapturingLLM()
@@ -198,7 +198,35 @@ async def test_executor_no_tool_step_skips_llm():
 
     assert result.response == "42"
     assert result.success is True
-    assert llm.prompts == []  # LLM was never called
+    assert llm.prompts == []  # no synthesis without prior context
+
+
+@pytest.mark.anyio
+async def test_executor_no_tool_step_synthesizes_with_prior_context():
+    """tool=none with prior results runs one synthesis LLM call."""
+    from pathlib import Path
+
+    llm = _CapturingLLM(response="Synthesized from prior steps.")
+    executor = Executor(llm, server_paths={"iot": Path("/fake/server.py")})  # type: ignore[arg-type]
+
+    step = _make_step(2, tool="none", expected_output="summary table")
+    ctx = {
+        1: StepResult(
+            step_number=1,
+            task="fetch",
+            server="battery",
+            response='{"rul_cycles": 12.3}',
+            tool="predict_rul",
+            tool_args={"asset_id": "B0005"},
+        )
+    }
+    result = await executor.execute_step(step, ctx, "Fleet RUL?")
+
+    assert result.response == "Synthesized from prior steps."
+    assert result.success is True
+    assert len(llm.prompts) == 1
+    assert "Step 1:" in llm.prompts[0]
+    assert "12.3" in llm.prompts[0]
 
 
 @pytest.mark.anyio

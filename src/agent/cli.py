@@ -16,6 +16,8 @@ import logging
 import sys
 from pathlib import Path
 
+from agent.models import OrchestratorResult
+
 _DEFAULT_MODEL = "watsonx/meta-llama/llama-4-maverick-17b-128e-instruct-fp8"
 
 _LOG_FORMAT = "%(asctime)s  %(levelname)-8s  %(name)s  %(message)s"
@@ -48,9 +50,16 @@ examples:
   plan-execute --model-id watsonx/ibm/granite-3-3-8b-instruct --show-plan "List sensors"
   plan-execute --model-id litellm_proxy/GCP/claude-4-sonnet "What are the failure modes?"
   plan-execute --verbose --show-history --json "How many IoT observations exist for CH-1?"
+  plan-execute --battery-scenarios -o results.txt
+  plan-execute --battery-scenarios custom_scenarios.json -o out.txt
 """,
     )
-    parser.add_argument("question", help="The question to answer.")
+    parser.add_argument(
+        "question",
+        nargs="?",
+        default=None,
+        help="The question to answer (not used with --battery-scenarios).",
+    )
     parser.add_argument(
         "--model-id",
         default=_DEFAULT_MODEL,
@@ -94,6 +103,25 @@ examples:
         "--show-times",
         action="store_true",
         help="Print per-phase timings (discovery, planning, per-step, summarization, total).",
+    )
+    parser.add_argument(
+        "--battery-scenarios",
+        metavar="FILE",
+        nargs="?",
+        const="battery_scenarios.json",
+        default=None,
+        help=(
+            "Run every scenario in a JSON array (objects with a 'query' field). "
+            "Default FILE is battery_scenarios.json in the current working directory. "
+            "Writes the combined report to --output."
+        ),
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        default=Path("results.txt"),
+        help="Output path for --battery-scenarios (default: results.txt).",
     )
     return parser
 
@@ -143,6 +171,125 @@ def _print_section(title: str) -> None:
     print(f"\n{'─' * 60}")
     print(f"  {title}")
     print(f"{'─' * 60}")
+
+
+def _section_lines(title: str) -> list[str]:
+    bar = "─" * 60
+    return ["", bar, f"  {title}", bar]
+
+
+def _render_run_text(
+    result: OrchestratorResult,
+    *,
+    show_plan: bool,
+    show_history: bool,
+    show_times: bool,
+) -> str:
+    """Human-readable plan / history / answer / timings (same shape as CLI output)."""
+    lines: list[str] = []
+    if show_plan:
+        lines.extend(_section_lines("Plan"))
+        for step in result.plan.steps:
+            deps = ", ".join(f"#{d}" for d in step.dependencies) or "none"
+            lines.append(f"  [{step.step_number}] {step.server}: {step.task}")
+            lines.append(f"       tool: {step.tool}  args: {step.tool_args}")
+            lines.append(f"       deps={deps} | expected: {step.expected_output}")
+
+    if show_history:
+        lines.extend(_section_lines("Execution History"))
+        for r in result.history:
+            status = "OK " if r.success else "ERR"
+            lines.append(f"  [{status}] Step {r.step_number} ({r.server}): {r.task}")
+            if r.tool and r.tool.lower() not in ("none", "null", ""):
+                lines.append(f"       tool: {r.tool}  args: {r.tool_args}")
+            detail = r.response if r.success else f"Error: {r.error}"
+            lines.append(f"        {detail}")
+
+    lines.extend(_section_lines("Answer"))
+    lines.append(result.answer)
+    lines.append("")
+
+    if show_times:
+        lines.extend(_section_lines("Timing"))
+        lines.append(f"  Discovery:              {result.discovery_duration_s:.3f}s")
+        lines.append(f"  Planning:               {result.planning_duration_s:.3f}s")
+        for r in result.history:
+            tool_label = f"{r.server}/{r.tool}" if r.tool else r.server
+            lines.append(f"  Step {r.step_number} [{tool_label}]")
+            lines.append(f"    full step:            {r.duration_s:.3f}s")
+            lines.append(f"    MCP tool call only:   {r.tool_call_duration_s:.3f}s")
+        lines.append(f"  Summarization:          {result.summarization_duration_s:.3f}s")
+        lines.append(f"  Total:                  {result.total_duration_s:.3f}s")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def _load_battery_scenarios(path: Path) -> list[dict]:
+    raw = path.read_text(encoding="utf-8")
+    data = json.loads(raw)
+    if not isinstance(data, list):
+        raise SystemExit(f"error: {path} must be a JSON array of scenario objects")
+    out: list[dict] = []
+    for i, item in enumerate(data):
+        if not isinstance(item, dict):
+            raise SystemExit(f"error: {path} item {i} must be an object")
+        q = item.get("query")
+        if not q or not isinstance(q, str):
+            raise SystemExit(f"error: {path} item {i} missing string 'query'")
+        out.append(item)
+    return out
+
+
+async def _run_battery_scenarios(args: argparse.Namespace) -> None:
+    from agent.plan_execute.runner import PlanExecuteRunner
+
+    scenario_path = Path(args.battery_scenarios).expanduser().resolve()
+    if not scenario_path.is_file():
+        raise SystemExit(f"error: scenarios file not found: {scenario_path}")
+
+    scenarios = _load_battery_scenarios(scenario_path)
+    out_path: Path = args.output.expanduser()
+    if not out_path.is_absolute():
+        out_path = (Path.cwd() / out_path).resolve()
+
+    llm = _build_llm(args.model_id)
+    server_paths = _parse_servers(args.servers)
+    runner = PlanExecuteRunner(llm=llm, server_paths=server_paths)
+
+    lines: list[str] = [
+        f"Battery scenario batch run",
+        f"Source: {scenario_path}",
+        f"Scenarios: {len(scenarios)}",
+        f"Model: {args.model_id}",
+        "",
+    ]
+
+    for item in scenarios:
+        sid = item.get("id", "?")
+        persona = item.get("persona", "")
+        query = item["query"]
+        banner = f"\n{'#' * 60}\nScenario {sid}: {persona}\n{'#' * 60}\n"
+        lines.append(banner)
+        lines.append("Query:")
+        lines.append(query)
+        lines.append("")
+
+        print(f"[plan-execute] Scenario {sid}/{len(scenarios)} …", file=sys.stderr, flush=True)
+        result = await runner.run(query)
+        # Full record in the batch file: always include plan and execution history.
+        lines.append(
+            _render_run_text(
+                result,
+                show_plan=True,
+                show_history=True,
+                show_times=args.show_times,
+            )
+        )
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text("\n".join(lines), encoding="utf-8")
+    print(f"Wrote {len(scenarios)} scenario(s) to {out_path}", file=sys.stderr)
 
 
 async def _run(args: argparse.Namespace) -> None:
@@ -227,7 +374,15 @@ def main() -> None:
     load_dotenv()
     args = _build_parser().parse_args()
     _setup_logging(args.verbose)
-    asyncio.run(_run(args))
+    if args.battery_scenarios:
+        asyncio.run(_run_battery_scenarios(args))
+    elif args.question is None:
+        _build_parser().error(
+            "question is required unless --battery-scenarios is set "
+            "(e.g. plan-execute --battery-scenarios -o results.txt)"
+        )
+    else:
+        asyncio.run(_run(args))
 
 
 if __name__ == "__main__":

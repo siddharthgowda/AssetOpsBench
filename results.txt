@@ -1,0 +1,107 @@
+WARNING:tensorflow:Mixed precision compatibility check (mixed_float16): WARNING
+The dtype policy mixed_float16 may run slowly because this machine does not have a GPU. Only Nvidia GPUs with compute capability of at least 7.0 run quickly with mixed_float16.
+If you will use compatible GPU(s) not attached to this host, e.g. by running a multi-worker model, you can ignore this warning. This message will only be logged once
+WARNING:tensorflow:Mixed precision compatibility check (mixed_float16): WARNING
+The dtype policy mixed_float16 may run slowly because this machine does not have a GPU. Only Nvidia GPUs with compute capability of at least 7.0 run quickly with mixed_float16.
+If you will use compatible GPU(s) not attached to this host, e.g. by running a multi-worker model, you can ignore this warning. This message will only be logged once
+WARNING:tensorflow:Mixed precision compatibility check (mixed_float16): WARNING
+The dtype policy mixed_float16 may run slowly because this machine does not have a GPU. Only Nvidia GPUs with compute capability of at least 7.0 run quickly with mixed_float16.
+If you will use compatible GPU(s) not attached to this host, e.g. by running a multi-worker model, you can ignore this warning. This message will only be logged once
+WARNING:tensorflow:Mixed precision compatibility check (mixed_float16): WARNING
+The dtype policy mixed_float16 may run slowly because this machine does not have a GPU. Only Nvidia GPUs with compute capability of at least 7.0 run quickly with mixed_float16.
+If you will use compatible GPU(s) not attached to this host, e.g. by running a multi-worker model, you can ignore this warning. This message will only be logged once
+WARNING:tensorflow:Mixed precision compatibility check (mixed_float16): WARNING
+The dtype policy mixed_float16 may run slowly because this machine does not have a GPU. Only Nvidia GPUs with compute capability of at least 7.0 run quickly with mixed_float16.
+If you will use compatible GPU(s) not attached to this host, e.g. by running a multi-worker model, you can ignore this warning. This message will only be logged once
+WARNING:tensorflow:Mixed precision compatibility check (mixed_float16): WARNING
+The dtype policy mixed_float16 may run slowly because this machine does not have a GPU. Only Nvidia GPUs with compute capability of at least 7.0 run quickly with mixed_float16.
+If you will use compatible GPU(s) not attached to this host, e.g. by running a multi-worker model, you can ignore this warning. This message will only be logged once
+
+────────────────────────────────────────────────────────────
+  Plan
+────────────────────────────────────────────────────────────
+  [1] battery: Predict RUL for B0005
+       tool: predict_rul  args: {}
+       deps=none | expected: RUL prediction for B0005
+  [2] battery: Predict RUL for B0006
+       tool: predict_rul  args: {}
+       deps=none | expected: RUL prediction for B0006
+  [3] battery: Predict RUL for B0007
+       tool: predict_rul  args: {}
+       deps=none | expected: RUL prediction for B0007
+  [4] battery: Predict RUL for B0018
+       tool: predict_rul  args: {}
+       deps=none | expected: RUL prediction for B0018
+  [5] utilities: Synthesize RUL predictions for B0005, B0006, B0007, and B0018
+       tool: none  args: {}
+       deps=#1, #2, #3, #4 | expected: Combined RUL predictions for the specified battery cells
+
+────────────────────────────────────────────────────────────
+  Execution History
+────────────────────────────────────────────────────────────
+  [OK ] Step 1 (battery): Predict RUL for B0005
+       tool: predict_rul  args: {'asset_id': 'B0005'}
+        {
+  "asset_id": "B0005",
+  "rul_cycles": 202.10430908203125,
+  "from_cycle": 0,
+  "inference_ms": 14.487436250783503,
+  "mae_cycles": 78.10430908203125
+}
+  [OK ] Step 2 (battery): Predict RUL for B0006
+       tool: predict_rul  args: {'asset_id': 'B0006', 'from_cycle': 0}
+        {
+  "asset_id": "B0006",
+  "rul_cycles": 935.3687744140625,
+  "from_cycle": 0,
+  "inference_ms": 12.043373340275139,
+  "mae_cycles": 827.3687744140625
+}
+  [OK ] Step 3 (battery): Predict RUL for B0007
+       tool: predict_rul  args: {'asset_id': 'B0007', 'from_cycle': 0}
+        {
+  "asset_id": "B0007",
+  "rul_cycles": 278.4463195800781,
+  "from_cycle": 0,
+  "inference_ms": 11.423925829585642,
+  "mae_cycles": null
+}
+  [OK ] Step 4 (battery): Predict RUL for B0018
+       tool: predict_rul  args: {'asset_id': 'B0018', 'from_cycle': 0}
+        {
+  "asset_id": "B0018",
+  "rul_cycles": 332.5635986328125,
+  "from_cycle": 0,
+  "inference_ms": 12.055449999170378,
+  "mae_cycles": 236.5635986328125
+}
+  [OK ] Step 5 (utilities): Synthesize RUL predictions for B0005, B0006, B0007, and B0018
+        ## RUL Predictions for Specified Battery Cells
+
+The RUL predictions for the battery cells B0005, B0006, B0007, and B0018 are synthesized based on the results from the prior steps.
+
+### Individual RUL ...
+
+────────────────────────────────────────────────────────────
+  Answer
+────────────────────────────────────────────────────────────
+The predicted Remaining Useful Life (RUL) for the specified battery cells are:
+- B0005: 202.10 cycles
+- B0006: 935.37 cycles
+- B0007: 278.45 cycles
+- B0018: 332.56 cycles
+
+Ranked by RUL:
+1. B0006: 935.37 cycles
+2. B0018: 332.56 cycles
+3. B0007: 278.45 cycles
+4. B0005: 202.10 cycles
+
+The Mean Absolute Error (MAE) for the available predictions are:
+- B0005: 78.10 cycles
+- B0006: 827.37 cycles
+- B0018: 236.56 cycles
+- B0007: Not available
+
+Average MAE for available values: 380.68 cycles. RMSE cannot be computed directly from the given data.
+
