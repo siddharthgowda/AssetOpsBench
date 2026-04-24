@@ -68,14 +68,27 @@ Output format — one block per step, exactly:
 #Dependency2: #S1
 #ExpectedOutput2: <what this step should produce>
 
+Optional per-step directive to fan out over a prior step's output:
+
+#Task3: Predict RUL for every cell in the fleet
+#Server3: battery
+#Tool3: predict_rul
+#Foreach3: #S1        (iterate step 1's list output; the executor calls the tool once per item)
+#Dependency3: #S1
+#ExpectedOutput3: RUL per cell
+
 Rules:
 - Server and tool names must exactly match those listed above.
 - Dependencies use #S<N> notation (e.g., #S1, #S2). Use "None" if none.
 - Keep tasks specific and actionable.
-- When a question applies the same tool to multiple specific assets (e.g. 'for each
-  cell', 'top N cells', 'B0005 and B0006'), emit ONE STEP PER ASSET, each with the
-  asset_id named explicitly in that step's task description. Do not cover multiple
-  assets in a single step.
+- FAN-OUT: when a question applies the same tool to every element of a prior step's
+  output (e.g. 'for each cell from the fleet list', 'top N cells'), use a single
+  step with a #Foreach<N>: #S<M> directive. The executor will call the tool once per
+  element in parallel and aggregate the results into one list. This is preferred
+  over enumerating N sequential steps.
+- If the question names a small fixed set of specific assets by ID (e.g. 'compare
+  B0005 and B0006' — only 2 or 3 IDs), you MAY emit one step per ID naming that ID
+  in the task text. For N>3 or 'every/each/all/top' phrasing, prefer #Foreach.
 - Do not use tool "none" as a placeholder before real data retrieval: for each asset,
   call the actual battery (or other) MCP tool that returns data in the same step that
   names the asset_id. Reserve tool "none" only for final synthesis or formatting when
@@ -103,6 +116,7 @@ _SERVER_RE = re.compile(r"#Server(\d+):\s*(.+)")
 _TOOL_RE = re.compile(r"#Tool(\d+):\s*(.+)")
 _DEP_RE = re.compile(r"#Dependency(\d+):\s*(.+)")
 _OUTPUT_RE = re.compile(r"#ExpectedOutput(\d+):\s*(.+)")
+_FOREACH_RE = re.compile(r"#Foreach(\d+):\s*(.+)")
 _DEP_NUM_RE = re.compile(r"#S(\d+)")
 
 
@@ -118,6 +132,9 @@ def parse_plan(raw: str) -> Plan:
     }
     deps_raw = {int(m.group(1)): m.group(2).strip() for m in _DEP_RE.finditer(raw)}
     outputs = {int(m.group(1)): m.group(2).strip() for m in _OUTPUT_RE.finditer(raw)}
+    foreach_raw = {
+        int(m.group(1)): m.group(2).strip() for m in _FOREACH_RE.finditer(raw)
+    }
 
     steps = []
     for n in sorted(tasks):
@@ -138,6 +155,21 @@ def parse_plan(raw: str) -> Plan:
                         f"Invalid dependency reference for step {n}: #S{dep}"
                     )
 
+        # Parse optional #ForeachN: "#S<M>" — must reference a valid earlier step.
+        foreach = None
+        if n in foreach_raw:
+            raw_fe = foreach_raw[n]
+            if raw_fe.lower() not in ("", "none", "null"):
+                nums = _DEP_NUM_RE.findall(raw_fe)
+                if nums:
+                    src = int(nums[0])
+                    if 1 <= src < n:
+                        foreach = f"#S{src}"
+                    else:
+                        raise ValueError(
+                            f"Invalid Foreach reference for step {n}: #S{src}"
+                        )
+
         steps.append(
             PlanStep(
                 step_number=n,
@@ -147,6 +179,7 @@ def parse_plan(raw: str) -> Plan:
                 tool_args={},
                 dependencies=dependencies,
                 expected_output=outputs.get(n, ""),
+                foreach=foreach,
             )
         )
 

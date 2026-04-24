@@ -94,6 +94,19 @@ class ImpedanceResult(BaseModel):
     alarm: bool
 
 
+class ActualMilestonesResult(BaseModel):
+    asset_id: str
+    crossings: dict[str, int]  # threshold label → ACTUAL cycle_index (ground truth)
+
+
+class ImpedanceTrajectoryResult(BaseModel):
+    asset_id: str
+    cycles: list[int]
+    rct: list[float]
+    re: list[float]
+    rectified_impedance_mag: list[Optional[float]]  # parsed complex → magnitude per cycle
+
+
 class OutlierResult(BaseModel):
     flagged_cells: list[str]
     z_scores: dict[str, float]
@@ -297,6 +310,84 @@ def predict_voltage_milestones(
         )
         crossings[f"{th:.2f}V"] = int(found)
     return MilestonesResult(asset_id=asset_id, crossings=crossings)
+
+
+@mcp.tool()
+def get_actual_voltage_milestones(
+    asset_id: str,
+    thresholds: list[float] = [2.9, 2.8, 2.7],
+) -> Union[ActualMilestonesResult, ErrorResult]:
+    """Scan the cell's actual recorded discharge Voltage_measured arrays for
+    threshold crossings — ground truth counterpart to predict_voltage_milestones.
+    Use this in combination with predict_voltage_milestones when the user asks
+    for MAE/RMSE on EOD timing, voltage crossings, or predicted-vs-actual voltage
+    drop comparisons. Works for any cell with at least one discharge cycle."""
+    client = CouchDBClient()
+    discharges = client.fetch_cycles(asset_id, cycle_type="discharge") or []
+    if not discharges:
+        return ErrorResult(error=f"No discharge cycles for {asset_id}")
+    discharges.sort(key=lambda x: x.get("cycle_index", 0))
+    crossings: dict[str, int] = {}
+    for th in thresholds:
+        found = -1
+        for d in discharges:
+            volts = d.get("data", {}).get("Voltage_measured") or []
+            if volts and min(volts) < th:
+                found = int(d.get("cycle_index", 0))
+                break
+        crossings[f"{th:.2f}V"] = found
+    return ActualMilestonesResult(asset_id=asset_id, crossings=crossings)
+
+
+@mcp.tool()
+def get_impedance_trajectory(asset_id: str) -> Union[ImpedanceTrajectoryResult, ErrorResult]:
+    """Return the per-cycle impedance trajectory (Rct, Re, and Rectified_Impedance
+    magnitude) for a lithium-ion cell. Ground truth for RMSE computation against
+    predicted impedance trajectories. Use this when the user asks for predicted-vs-
+    actual impedance curves, sensor-drift validation, or impedance RMSE metrics."""
+    client = CouchDBClient()
+    impedances = client.fetch_cycles(asset_id, cycle_type="impedance") or []
+    if not impedances:
+        return ErrorResult(error=f"No impedance cycles for {asset_id}")
+    impedances.sort(key=lambda x: x.get("cycle_index", 0))
+    cycles: list[int] = []
+    rct_vals: list[float] = []
+    re_vals: list[float] = []
+    rect_mag: list[Optional[float]] = []
+    for imp in impedances:
+        data = imp.get("data", {})
+        rct = data.get("Rct")
+        re_ = data.get("Re")
+        if rct is None:
+            continue
+        try:
+            cycles.append(int(imp.get("cycle_index", 0)))
+            rct_vals.append(float(rct))
+            re_vals.append(float(re_) if re_ is not None else 0.0)
+        except (TypeError, ValueError):
+            cycles.pop() if len(cycles) > len(rct_vals) else None
+            continue
+        # Parse Rectified_Impedance — stored as a list of complex-number strings
+        # like "(1.23+0.04j)". We summarize per cycle as the mean magnitude.
+        ri_raw = data.get("Rectified_Impedance") or []
+        mag: Optional[float] = None
+        if ri_raw:
+            try:
+                mags = [abs(complex(s.strip())) for s in ri_raw if isinstance(s, str) and s.strip()]
+                if mags:
+                    mag = float(sum(mags) / len(mags))
+            except (TypeError, ValueError):
+                mag = None
+        rect_mag.append(mag)
+    if not cycles:
+        return ErrorResult(error=f"No parseable impedance cycles for {asset_id}")
+    return ImpedanceTrajectoryResult(
+        asset_id=asset_id,
+        cycles=cycles,
+        rct=rct_vals,
+        re=re_vals,
+        rectified_impedance_mag=rect_mag,
+    )
 
 
 @mcp.tool()

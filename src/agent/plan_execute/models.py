@@ -8,7 +8,13 @@ from typing import Optional
 
 @dataclass
 class PlanStep:
-    """A single step in an execution plan."""
+    """A single step in an execution plan.
+
+    If ``foreach`` is set (e.g. ``"#S1"``), the executor resolves the referenced
+    step's output into a list of items and calls ``tool`` once per item, in
+    parallel. The aggregated result is stored as a JSON ``{"items": [...]}`` in
+    the step's StepResult.response.
+    """
 
     step_number: int
     task: str
@@ -17,6 +23,7 @@ class PlanStep:
     tool_args: dict
     dependencies: list[int]
     expected_output: str
+    foreach: Optional[str] = None  # e.g. "#S1" to fan out over step 1's output
 
 
 @dataclass

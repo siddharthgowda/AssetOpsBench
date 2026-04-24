@@ -257,7 +257,7 @@ async def _run_battery_scenarios(args: argparse.Namespace) -> None:
     server_paths = _parse_servers(args.servers)
     runner = PlanExecuteRunner(llm=llm, server_paths=server_paths)
 
-    lines: list[str] = [
+    header_lines: list[str] = [
         f"Battery scenario batch run",
         f"Source: {scenario_path}",
         f"Scenarios: {len(scenarios)}",
@@ -265,31 +265,49 @@ async def _run_battery_scenarios(args: argparse.Namespace) -> None:
         "",
     ]
 
+    # Write per-scenario: flush the file after every scenario completes (or errors).
+    # If one scenario crashes, the previous ones remain on disk and the next starts fresh.
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text("\n".join(header_lines) + "\n", encoding="utf-8")
+
+    completed = 0
     for item in scenarios:
         sid = item.get("id", "?")
         persona = item.get("persona", "")
         query = item["query"]
         banner = f"\n{'#' * 60}\nScenario {sid}: {persona}\n{'#' * 60}\n"
-        lines.append(banner)
-        lines.append("Query:")
-        lines.append(query)
-        lines.append("")
 
         print(f"[plan-execute] Scenario {sid}/{len(scenarios)} …", file=sys.stderr, flush=True)
-        result = await runner.run(query)
-        # Full record in the batch file: always include plan and execution history.
-        lines.append(
-            _render_run_text(
-                result,
-                show_plan=True,
-                show_history=True,
-                show_times=args.show_times,
+        chunk: list[str] = [banner, "Query:", query, ""]
+        try:
+            result = await runner.run(query)
+            chunk.append(
+                _render_run_text(
+                    result,
+                    show_plan=True,
+                    show_history=True,
+                    show_times=args.show_times,
+                )
             )
-        )
+            completed += 1
+        except Exception as exc:  # noqa: BLE001
+            # Record the failure and continue so one bad scenario does not lose the rest.
+            chunk.append("---")
+            chunk.append(f"SCENARIO {sid} FAILED: {type(exc).__name__}: {exc}")
+            chunk.append("---")
+            print(
+                f"[plan-execute] Scenario {sid} crashed ({type(exc).__name__}); continuing",
+                file=sys.stderr,
+                flush=True,
+            )
 
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text("\n".join(lines), encoding="utf-8")
-    print(f"Wrote {len(scenarios)} scenario(s) to {out_path}", file=sys.stderr)
+        with out_path.open("a", encoding="utf-8") as f:
+            f.write("\n".join(chunk) + "\n")
+
+    print(
+        f"Wrote {completed}/{len(scenarios)} scenario(s) to {out_path}",
+        file=sys.stderr,
+    )
 
 
 async def _run(args: argparse.Namespace) -> None:

@@ -7,6 +7,7 @@ dict from the task description, original question, and prior step results.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -111,10 +112,22 @@ Instructions:
 Synthesis:"""
 
 
+# Maximum characters per step's response included in the context shown to the
+# synthesis / arg-resolution LLM. Prevents fan-out aggregates (14 cells × full
+# per-cycle histories) from blowing past the model's context window.
+_MAX_STEP_RESPONSE_CHARS = 6000
+
+
+def _truncate_for_context(text: str, limit: int = _MAX_STEP_RESPONSE_CHARS) -> str:
+    if len(text) <= limit:
+        return text
+    return text[:limit] + f"\n…[truncated {len(text) - limit} chars from step response]"
+
+
 def _format_context_lines(context: dict[int, StepResult]) -> str:
     return "\n".join(
         f"Step {n}: "
-        + (r.response if r.success else f"ERROR: {r.error}")
+        + (_truncate_for_context(r.response) if r.success else f"ERROR: {r.error}")
         for n, r in sorted(context.items())
     )
 
@@ -197,6 +210,85 @@ def _omit_null_tool_args(args: dict) -> dict:
         if v == "":
             continue
         out[k] = v
+    return out
+
+
+_FOREACH_REF_RE = re.compile(r"#S(\d+)")
+
+
+def _extract_foreach_items(response: str) -> list[dict]:
+    """Extract a list of items from a prior step's response string.
+
+    Tries, in order:
+      1. Parse the whole response as JSON; look for common container keys.
+      2. Find the last ``{...}`` block in the string and try JSON.
+      3. Find the last ``[...]`` array and try JSON.
+    Each item is normalized to a dict with at least ``asset_id`` when possible.
+    Returns an empty list if nothing iterable can be found.
+    """
+    container_keys = ("items", "cells", "flagged_cells", "asset_ids", "rows", "docs")
+
+    def _normalize(v: Any) -> list[dict]:
+        if isinstance(v, list):
+            out: list[dict] = []
+            for el in v:
+                if isinstance(el, dict):
+                    out.append(el)
+                elif isinstance(el, str):
+                    out.append({"asset_id": el})
+            return out
+        return []
+
+    def _probe(obj: Any) -> list[dict]:
+        if isinstance(obj, list):
+            return _normalize(obj)
+        if isinstance(obj, dict):
+            for k in container_keys:
+                if k in obj and isinstance(obj[k], list):
+                    return _normalize(obj[k])
+            # Some tools return a dict of {asset_id: z_score, ...} — treat keys as assets.
+            if obj and all(isinstance(k, str) for k in obj.keys()):
+                return [{"asset_id": k, "value": v} for k, v in obj.items()]
+        return []
+
+    # 1. whole-string JSON
+    try:
+        items = _probe(json.loads(response))
+        if items:
+            return items
+    except (ValueError, TypeError):
+        pass
+    # 2. last {...}
+    try:
+        start, end = response.rfind("{"), response.rfind("}") + 1
+        if start != -1 and end > start:
+            items = _probe(json.loads(response[start:end]))
+            if items:
+                return items
+    except (ValueError, TypeError):
+        pass
+    # 3. last [...]
+    try:
+        start, end = response.rfind("["), response.rfind("]") + 1
+        if start != -1 and end > start:
+            items = _probe(json.loads(response[start:end]))
+            if items:
+                return items
+    except (ValueError, TypeError):
+        pass
+    return []
+
+
+def _foreach_item_to_args(tool: str, item: dict) -> dict:
+    """Build the per-iteration tool args from one element of the source list."""
+    out: dict = {}
+    aid = item.get("asset_id")
+    if isinstance(aid, str):
+        out["asset_id"] = aid
+    if tool == "list_batteries":
+        out.setdefault("site_name", "MAIN")
+    if tool == "predict_voltage_curve":
+        out.setdefault("cycle_index", 0)
     return out
 
 
@@ -328,6 +420,90 @@ class Executor:
                     f"Unknown server '{step.server}'. "
                     f"Registered servers: {list(self._server_paths)}"
                 ),
+            )
+
+        # ── Fan-out branch: if the step carries a #Foreach directive, call the
+        # same tool once per element of the referenced step's output and
+        # aggregate results into a single {"items": [...]} JSON payload.
+        if step.foreach and step.tool and step.tool.lower() not in ("none", "null"):
+            m = _FOREACH_REF_RE.search(step.foreach)
+            if not m:
+                return StepResult(
+                    step_number=step.step_number,
+                    task=step.task,
+                    server=step.server,
+                    response="",
+                    error=f"Invalid #Foreach reference: {step.foreach!r}",
+                    tool=step.tool,
+                    tool_args=step.tool_args,
+                )
+            src_num = int(m.group(1))
+            src = context.get(src_num)
+            if src is None or not src.success:
+                return StepResult(
+                    step_number=step.step_number,
+                    task=step.task,
+                    server=step.server,
+                    response="",
+                    error=f"Foreach source #S{src_num} unavailable or failed",
+                    tool=step.tool,
+                    tool_args=step.tool_args,
+                )
+            items = _extract_foreach_items(src.response)
+            if not items:
+                return StepResult(
+                    step_number=step.step_number,
+                    task=step.task,
+                    server=step.server,
+                    response=json.dumps({"items": []}),
+                    tool=step.tool,
+                    tool_args={"foreach_source": step.foreach},
+                )
+            _log.info(
+                "Step %d: fan-out over %d item(s) from %s",
+                step.step_number,
+                len(items),
+                step.foreach,
+            )
+
+            async def _run_one(item: dict) -> dict:
+                call_args = _foreach_item_to_args(step.tool, item)
+                call_args = _omit_null_tool_args(
+                    _normalize_resolved_args(step.tool, call_args)
+                )
+                try:
+                    resp = await _call_tool(server_path, step.tool, call_args)
+                    # Compact JSON whitespace — tool responses are often pretty-printed
+                    # which wastes context budget (each 4-space indent × 100s of lines
+                    # per cell × 14 cells can blow past the model's context window).
+                    try:
+                        resp = json.dumps(json.loads(resp), separators=(",", ":"), default=str)
+                    except (ValueError, TypeError):
+                        pass  # non-JSON response; leave as-is
+                    return {"asset_id": call_args.get("asset_id"), "result": resp}
+                except BaseException as tool_exc:  # noqa: BLE001
+                    payload = _tool_unavailable_response(tool_exc)
+                    if payload is not None:
+                        return {"asset_id": call_args.get("asset_id"), "result": payload}
+                    return {
+                        "asset_id": call_args.get("asset_id"),
+                        "error": str(tool_exc),
+                    }
+
+            t_tool = time.perf_counter()
+            aggregated = await asyncio.gather(*[_run_one(it) for it in items])
+            tool_call_duration_s = time.perf_counter() - t_tool
+            return StepResult(
+                step_number=step.step_number,
+                task=step.task,
+                server=step.server,
+                response=json.dumps({"items": aggregated}, default=str),
+                tool=step.tool,
+                tool_args={
+                    "foreach_source": step.foreach,
+                    "n_items": len(items),
+                },
+                tool_call_duration_s=tool_call_duration_s,
             )
 
         if not step.tool or step.tool.lower() in ("none", "null"):

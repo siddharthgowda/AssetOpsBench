@@ -22,7 +22,7 @@ apt-get update -qq
 apt-get install -y -qq python3 python3-pip
 pip3 install -q --break-system-packages requests pandas python-dotenv
 
-echo "Loading IoT asset data (sample of NASA Li Battery Data)..."
+echo "Loading IoT asset data (sample of chiller dataset)..."
 COUCHDB_URL="http://localhost:5984" \
   python3 /couchdb/init_asset_data.py \
     --data-file /sample_data/iot/chiller6_june2020_sensordata_couchdb.json \
