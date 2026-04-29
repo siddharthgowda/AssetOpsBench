@@ -1,0 +1,15 @@
+# Local CouchDB using credentials from `.env` (same vars as init_battery / battery server).
+# Run from repo root:  docker compose -f docker-compose.couchdb.yml up -d
+# Stop/remove:        docker compose -f docker-compose.couchdb.yml down
+
+services:
+  couchdb:
+    image: couchdb:3.5
+    container_name: couchdb-battery
+    ports:
+      - "5984:5984"
+    env_file:
+      - .env
+    environment:
+      COUCHDB_USER: ${COUCHDB_USERNAME}
+      COUCHDB_PASSWORD: ${COUCHDB_PASSWORD}

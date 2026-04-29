@@ -1,8 +1,8 @@
 """Battery MCP Server — lithium-ion analytics using the acctouhou pretrained model.
 
-Tool surface (8):
+Tool surface (9):
     list_batteries, get_battery_cycle_summary,
-    predict_rul, predict_voltage_curve, predict_voltage_milestones,
+    predict_rul, predict_rul_batch, predict_voltage_curve, predict_voltage_milestones,
     analyze_impedance_growth, detect_capacity_outliers,
     diagnose_battery.
 
@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 import numpy as np
 from dotenv import load_dotenv
@@ -30,7 +30,13 @@ from pydantic import BaseModel
 
 from . import model_wrapper
 from .couchdb_client import CouchDBClient
-from .model_wrapper import _CACHE, _load_once, precompute_cell
+from .model_wrapper import (
+    _CACHE,
+    _load_once,
+    ensure_voltage_curves,
+    precompute_cell,
+    precompute_cells_batched_fs,
+)
 from .preprocessing import preprocess_cell_from_couchdb
 
 
@@ -73,6 +79,19 @@ class RULResult(BaseModel):
     from_cycle: int
     inference_ms: float
     mae_cycles: Optional[float] = None  # vs ground truth when known
+
+
+class RULBatchRow(BaseModel):
+    asset_id: str
+    rul_cycles: Optional[float] = None
+    from_cycle: int = 0
+    inference_ms: Optional[float] = None
+    mae_cycles: Optional[float] = None
+    error: Optional[str] = None
+
+
+class RULBatchResult(BaseModel):
+    rows: list[RULBatchRow]
 
 
 class VoltageCurveResult(BaseModel):
@@ -132,6 +151,8 @@ _USABLE_MODEL_CELLS = [
     "B0054", "B0055", "B0056",
 ]
 
+_CELL_BOOT_ORDER = {c: i for i, c in enumerate(_USABLE_MODEL_CELLS)}
+
 
 def _boot() -> None:
     _load_once()
@@ -145,12 +166,48 @@ def _boot() -> None:
             "Check BATTERY_MODEL_WEIGHTS_DIR and BATTERY_NORMS_DIR."
         )
         return
-    for cell in _USABLE_MODEL_CELLS:
+
+    parallel_fetch = os.environ.get("BATTERY_BOOT_PARALLEL_FETCH", "1").strip() != "0"
+    use_batch_fs = os.environ.get("BATTERY_BOOT_BATCH_FS", "").strip() == "1"
+    n_workers = max(1, int(os.environ.get("BATTERY_BOOT_FETCH_WORKERS", "4") or 4))
+
+    def load_one(cell: str) -> tuple[str, np.ndarray, np.ndarray, np.ndarray]:
+        return cell, *preprocess_cell_from_couchdb(cell, client)
+
+    cells_ok: list[tuple[str, np.ndarray, np.ndarray, np.ndarray]] = []
+    if parallel_fetch:
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        futures: dict[Any, str] = {}
+        with ThreadPoolExecutor(max_workers=n_workers) as ex:
+            for cell in _USABLE_MODEL_CELLS:
+                futures[ex.submit(load_one, cell)] = cell
+            for fut in as_completed(futures):
+                cell = futures[fut]
+                try:
+                    cid, ch, dis, summ = fut.result()
+                    cells_ok.append((cid, ch, dis, summ))
+                except Exception as e:  # noqa: BLE001
+                    logger.warning("Skipped %s: %s", cell, e)
+        cells_ok.sort(key=lambda t: _CELL_BOOT_ORDER.get(t[0], 999))
+    else:
+        for cell in _USABLE_MODEL_CELLS:
+            try:
+                cells_ok.append(load_one(cell))
+            except Exception as e:  # noqa: BLE001
+                logger.warning("Skipped %s: %s", cell, e)
+
+    if use_batch_fs and cells_ok:
         try:
-            ch, dis, summ = preprocess_cell_from_couchdb(cell, client)
-            precompute_cell(cell, ch, dis, summ)
+            precompute_cells_batched_fs(cells_ok)
         except Exception as e:  # noqa: BLE001
-            logger.warning("Skipped %s: %s", cell, e)
+            logger.warning("BATCH_FS failed, falling back per-cell: %s", e)
+            for c, ch, dis, summ in cells_ok:
+                precompute_cell(c, ch, dis, summ)
+    else:
+        for c, ch, dis, summ in cells_ok:
+            precompute_cell(c, ch, dis, summ)
+
     logger.info("%d cells preloaded in battery cache", len(_CACHE))
 
 
@@ -267,6 +324,46 @@ def predict_rul(
 
 
 @mcp.tool()
+def predict_rul_batch(
+    asset_ids: Optional[list[str]] = None,
+    from_cycle: int = 0,
+) -> Union[RULBatchResult, ErrorResult]:
+    """Predict RUL for multiple lithium-ion cells in one round-trip. Use when the user asks
+    for fleet rankings, top-N at-risk cells, or batch RUL — reduces planner chatter vs
+    many serial ``predict_rul`` calls. Defaults to all model-ready cached cells when
+    ``asset_ids`` is omitted."""
+    if not _model_available():
+        return ErrorResult(error="Pretrained model unavailable")
+    ids = asset_ids if asset_ids else sorted(_CACHE.keys())
+    rows: list[RULBatchRow] = []
+    for aid in ids:
+        entry = _CACHE.get(aid)
+        if not entry:
+            rows.append(
+                RULBatchRow(
+                    asset_id=aid,
+                    from_cycle=from_cycle,
+                    error="No cached inference for this cell",
+                )
+            )
+            continue
+        idx = max(1, min(from_cycle, len(entry["rul_trajectory"]))) - 1
+        predicted = float(entry["rul_trajectory"][idx])
+        gt = _ground_truth_rul(aid, from_cycle)
+        mae = abs(predicted - gt) if gt is not None else None
+        rows.append(
+            RULBatchRow(
+                asset_id=aid,
+                rul_cycles=predicted,
+                from_cycle=from_cycle,
+                inference_ms=entry["inference_ms_per_cycle"],
+                mae_cycles=mae,
+            )
+        )
+    return RULBatchResult(rows=rows)
+
+
+@mcp.tool()
 def predict_voltage_curve(
     asset_id: str, cycle_index: int = 0
 ) -> Union[VoltageCurveResult, ErrorResult]:
@@ -278,7 +375,11 @@ def predict_voltage_curve(
     entry = _CACHE.get(asset_id)
     if not entry:
         return ErrorResult(error=f"No cached inference for {asset_id}")
-    curves = entry["voltage_curves"]
+    ensure_voltage_curves(asset_id)
+    entry = _CACHE.get(asset_id)
+    curves = entry.get("voltage_curves") if entry else None
+    if curves is None:
+        return ErrorResult(error=f"Voltage data unavailable for {asset_id}")
     idx = max(0, min(cycle_index, len(curves) - 1))
     return VoltageCurveResult(
         asset_id=asset_id,
@@ -301,6 +402,10 @@ def predict_voltage_milestones(
     entry = _CACHE.get(asset_id)
     if not entry:
         return ErrorResult(error=f"No cached inference for {asset_id}")
+    ensure_voltage_curves(asset_id)
+    entry = _CACHE.get(asset_id)
+    if not entry or entry.get("voltage_curves") is None:
+        return ErrorResult(error=f"Voltage data unavailable for {asset_id}")
     curves = entry["voltage_curves"]
     crossings: dict[str, int] = {}
     for th in thresholds:

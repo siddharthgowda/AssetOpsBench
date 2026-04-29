@@ -13,6 +13,25 @@ Lithium-ion battery analytics for AssetOpsBench: RUL, voltage curves, impedance 
 | `BATTERY_CELL_SUBSET` | 14-cell prototyping subset | comma-separated asset IDs, or `all` |
 | `BATTERY_MODEL_ID` | inherits `FMSR_MODEL_ID` | LLM used by `diagnose_battery` |
 | `COUCHDB_URL` / `COUCHDB_USERNAME` / `COUCHDB_PASSWORD` | see `.env.public` | shared with other servers |
+| `BATTERY_FS_BATCH_SIZE` | `128` | inner batch for feature_selector `.predict` / `__call__` |
+| `BATTERY_HEAD_BATCH_SIZE` | `256` | batch size for RUL / voltage heads |
+| `BATTERY_TF_INTRA_OP_THREADS` | TF default | set before load (use `0` or unset to keep default) |
+| `BATTERY_TF_INTER_OP_THREADS` | TF default | set before load |
+| `BATTERY_GPU_FORCE_FLOAT32` | unset | if `1` and GPU visible, force float32 policy (vs mixed_float16) |
+| `BATTERY_KERAS_USE_CALL` | unset | if `1`, use `model(x, training=False)` instead of `predict` where supported |
+| `BATTERY_LAZY_VOLTAGE` | unset | if `1`, skip voltage head at boot; fill on first voltage tool (faster boot) |
+| `BATTERY_BOOT_PARALLEL_FETCH` | `1` | if `0`, sequential CouchDB preprocess during `_boot` |
+| `BATTERY_BOOT_FETCH_WORKERS` | `4` | thread pool size for parallel fetch |
+| `BATTERY_BOOT_BATCH_FS` | unset | if `1`, run batched feature selectors across all boot cells (shared `n_cycles`) |
+| `TF_ENABLE_ONEDNN_OPTS` | `0` via model_wrapper default | set to `1` in `.env` on **Intel** to try oneDNN (benchmark vs baseline); Apple Silicon often irrelevant |
+
+See [docs/speedup_baseline.md](docs/speedup_baseline.md) (baseline JSON + success criteria), [docs/inference_alt_runtimes.md](docs/inference_alt_runtimes.md) (SavedModel / TFLite / ONNX / XLA notes).
+
+**Concurrency:** prefer **batching** and TF thread envs over `ThreadPoolExecutor` around `predict` unless your benchmark proves a wall-time win ([profiles/README.md](profiles/README.md)).
+
+### After each speed PR
+
+Re-run `benchmark-battery-inference` with the same label prefix and note the JSON path in the PR (see `docs/speedup_baseline.md`).
 
 ## First-time setup
 
@@ -46,20 +65,34 @@ done
 
 **Pytest:** `uv run pytest src/servers/battery/tests/` (preprocessing tests always run; tool + validation tests skip without CouchDB/weights).
 
-## Tools (8)
+## Inference profiling (Part B + C)
+
+Measure **RUL / voltage** `predict` throughput (sequential vs batched, optional `ThreadPoolExecutor`, TF thread sweeps, optional feature-selector path) and write **JSON + CSV** under `profiles/` (gitignored except `profiles/README.md`).
+
+```bash
+uv sync --group battery
+uv run benchmark-battery-inference --label inference_baseline --repeats 3 --notes "CPU default threads"
+```
+
+- **Compare two JSON runs** (default: flag `wall_ms` mean changes &gt; 5%):  
+  `python scripts/compare_battery_profiles.py profiles/a.json profiles/b.json`
+- **Labels, NPZ format, batch-size knee, CPU vs wall:** see [profiles/README.md](profiles/README.md).
+
+## Tools (9)
 
 | Tool | What it does | Uses model? |
 |------|--------------|-------------|
 | `list_batteries` | List available cells with `model_ready` flag | no |
 | `get_battery_cycle_summary` | Per-cycle Capacity / max_T / avg_V / Rct / Re | no |
 | `predict_rul` | Remaining cycles to 1.4 Ah (30% fade) | yes — `predictor.h5` |
+| `predict_rul_batch` | RUL for many cached cells in one call | yes — cache |
 | `predict_voltage_curve` | 100-point V-SOC curve for a cycle | yes — `predictor2.h5` |
 | `predict_voltage_milestones` | Cycle where V first crosses a threshold | yes — `predictor2.h5` |
 | `analyze_impedance_growth` | Rct exponential growth rate + alarm | no — `scipy.polyfit` |
 | `detect_capacity_outliers` | Fleet z-score over capacity fade rate | no — numpy |
 | `diagnose_battery` | Combined RUL + impedance + outlier with LLM narration | yes + LLM |
 
-Abstract scenarios like *"predict RUL for test cells and list top 12 at risk"* are orchestrated by the plan-execute agent: it calls `list_batteries` → loops `predict_rul` → sorts → returns top N. Tools stay single-cell primitives on purpose.
+Abstract scenarios like *"predict RUL for test cells and list top 12 at risk"* are orchestrated by the plan-execute agent: it calls `list_batteries` → `predict_rul` or `predict_rul_batch` → sorts → returns top N. Tools stay single-cell primitives on purpose except for the optional batch RUL helper.
 
 ## Example use cases from `battery_scenarios.json`
 
@@ -98,9 +131,10 @@ The acctouhou model was trained on the Severson LFP dataset; NASA B0xx cells are
 ```
 src/servers/battery/
   __init__.py
-  main.py                  FastMCP server, 8 tools, Pydantic result models
+  main.py                  FastMCP server, 9 tools, Pydantic result models
   preprocessing.py         NASA JSON cycle → (4, 500) tensor [Q, V, I, T]
   model_wrapper.py         lazy TF/Keras 2 model loader + inference cache
+  benchmark_inference.py   Part B+C inference profiling (JSON/CSV under profiles/)
   couchdb_client.py        CouchDB fetch helpers
   diagnosis.py             LLM-narrated failure-mode classifier (3 few-shot)
   chemistries.yaml         Li-ion NCA 18650 thresholds
@@ -108,6 +142,8 @@ src/servers/battery/
     conftest.py
     test_preprocessing.py  (5 tests — run without backends)
     test_tools.py          (4 tests — need CouchDB + weights)
+    test_benchmark_inference.py  profiling helpers / import smoke
+    test_speedup_regression.py   precompute ms cap (optional weights)
     test_validation.py     (1 gate — B0018 MAE ≤ 30 cycles)
 ```
 
@@ -115,5 +151,5 @@ src/servers/battery/
 
 - acctouhou/Prediction_of_battery — pretrained model source (Apache 2.0)
 - NASA Prognostics Center of Excellence — raw cycling data (US Public Domain)
-- `docs/battery_server_plan.md` — full architecture + rationale
-- `docs/battery_1day_plan.md` — implementation timeline
+- `docs/speedup_baseline.md` — A/B benchmark workflow + success criteria
+- `docs/inference_alt_runtimes.md` — SavedModel, TFLite, ONNX, XLA spikes

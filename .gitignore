@@ -211,3 +211,7 @@ src/tmp/
 
 # Standard layout for external (downloaded) artifacts — weights, norms, datasets
 external/
+
+# Local profiling output (keep profiles/README.md tracked)
+profiles/*
+!profiles/README.md

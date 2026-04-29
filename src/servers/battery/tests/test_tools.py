@@ -7,12 +7,14 @@ from servers.battery.main import (
     ErrorResult,
     ImpedanceResult,
     OutlierResult,
+    RULBatchResult,
     RULResult,
     VoltageCurveResult,
     analyze_impedance_growth,
     detect_capacity_outliers,
     list_batteries,
     predict_rul,
+    predict_rul_batch,
     predict_voltage_curve,
 )
 
@@ -30,6 +32,14 @@ def test_predict_rul_b0005(requires_couchdb, requires_weights):
     if isinstance(r, RULResult):
         assert r.inference_ms < 500  # generous — scenario 5 wants <100, we allow slack
         assert isinstance(r.rul_cycles, float)
+
+
+def test_predict_rul_batch_structure(requires_couchdb, requires_weights):
+    r = predict_rul_batch(asset_ids=["B0005", "B9999_not_cached"], from_cycle=50)
+    assert isinstance(r, RULBatchResult)
+    assert len(r.rows) == 2
+    assert r.rows[0].asset_id == "B0005"
+    assert r.rows[1].error is not None
 
 
 def test_predict_voltage_curve_length(requires_couchdb, requires_weights):
