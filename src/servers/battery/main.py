@@ -151,6 +151,14 @@ _USABLE_MODEL_CELLS = [
     "B0054", "B0055", "B0056",
 ]
 
+# Optional boot-subset override for profiling / dev.
+_boot_subset_env = os.environ.get("BATTERY_BOOT_CELL_SUBSET", "").strip()
+if _boot_subset_env:
+    _requested = [c.strip() for c in _boot_subset_env.split(",") if c.strip()]
+    _filtered = [c for c in _requested if c in _USABLE_MODEL_CELLS]
+    if _filtered:
+        _USABLE_MODEL_CELLS = _filtered
+
 _CELL_BOOT_ORDER = {c: i for i, c in enumerate(_USABLE_MODEL_CELLS)}
 
 

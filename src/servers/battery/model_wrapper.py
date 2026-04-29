@@ -102,7 +102,7 @@ def feature_selector(model, x: np.ndarray, norm) -> np.ndarray:
 
 
 def concat_data(x1: np.ndarray, x2: np.ndarray, summary: np.ndarray, summary_norm) -> np.ndarray:
-    s = np.asarray(summary, dtype=np.float32, copy=False)
+    s = np.asarray(summary, dtype=np.float32)
     s_norm = (s - summary_norm[0]) / summary_norm[1]
     return np.hstack((x1, x2, s_norm.astype(np.float32, copy=False)))
 
