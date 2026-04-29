@@ -60,14 +60,6 @@ battery = [
     "tf_keras>=2.16",
     "scikit-learn>=1.3",
 ]
-# Profiling tools for battery server performance analysis.
-# Install with: uv sync --group profiling
-# See instructions_profiling.md for full usage guide.
-profiling = [
-    "psutil>=5.9",
-    "line-profiler>=4.0",
-    "memory-profiler>=0.61",
-]
 
 [tool.uv]
 package = true
