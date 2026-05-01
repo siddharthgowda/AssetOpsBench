@@ -32,15 +32,15 @@ def main() -> None:
     import tensorflow as tf  # noqa: PLC0415
     import tf_keras  # noqa: F401, PLC0415
 
-    from servers.battery.model_wrapper import _load_once, _MODEL_AVAILABLE, _MODELS  # noqa: PLC0415
+    from servers.battery import model_wrapper as mw  # noqa: PLC0415
 
-    _load_once()
-    if not _MODEL_AVAILABLE or _MODELS is None:
+    mw._load_once()
+    if not mw._MODEL_AVAILABLE or mw._MODELS is None:
         print("Models not loaded; set BATTERY_MODEL_WEIGHTS_DIR.", file=sys.stderr)
         sys.exit(1)
 
     args.out.mkdir(parents=True, exist_ok=True)
-    m = _MODELS
+    m = mw._MODELS
     for name, model in m.items():
         dest = args.out / name
         dest.mkdir(parents=True, exist_ok=True)

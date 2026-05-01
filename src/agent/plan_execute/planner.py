@@ -81,11 +81,16 @@ Rules:
 - Server and tool names must exactly match those listed above.
 - Dependencies use #S<N> notation (e.g., #S1, #S2). Use "None" if none.
 - Keep tasks specific and actionable.
-- FAN-OUT: when a question applies the same tool to every element of a prior step's
-  output (e.g. 'for each cell from the fleet list', 'top N cells'), use a single
-  step with a #Foreach<N>: #S<M> directive. The executor will call the tool once per
-  element in parallel and aggregate the results into one list. This is preferred
-  over enumerating N sequential steps.
+- BATCH-PREFERRED: if a tool's signature includes a LIST parameter (e.g. ``asset_ids:
+  list[str]``, ``cell_ids: list[str]``, names ending in "_batch"), call it ONCE with
+  the full list rather than using #Foreach. The list parameter is the batched form
+  and is much faster than N parallel calls. Examples:
+    ✓ predict_rul_batch  with asset_ids=[<all cells>]   (one step, no #Foreach)
+    ✗ #Foreach over predict_rul_batch                   (defeats batching)
+- FAN-OUT (foreach): only use #Foreach<N>: #S<M> for tools that take a SINGLE value
+  per call (e.g. ``predict_rul`` with one ``asset_id``, ``analyze_impedance_growth``
+  with one cell). The executor calls the tool once per element in parallel. Do NOT
+  use #Foreach for a tool that already accepts a list parameter — use the list form.
 - If the question names a small fixed set of specific assets by ID (e.g. 'compare
   B0005 and B0006' — only 2 or 3 IDs), you MAY emit one step per ID naming that ID
   in the task text. For N>3 or 'every/each/all/top' phrasing, prefer #Foreach.

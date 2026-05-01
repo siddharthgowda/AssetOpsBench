@@ -36,6 +36,7 @@ wo-mcp-server = "servers.wo.main:main"
 vibration-mcp-server = "servers.vibration.main:main"
 battery-mcp-server = "servers.battery.main:main"
 benchmark-battery-inference = "servers.battery.benchmark_inference:main"
+battery-profile = "servers.battery.profile_cli:main"
 
 
 [dependency-groups]

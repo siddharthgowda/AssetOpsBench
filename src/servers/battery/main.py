@@ -36,6 +36,7 @@ from .model_wrapper import (
     ensure_voltage_curves,
     precompute_cell,
     precompute_cells_batched_fs,
+    precompute_cells_fully_batched,
 )
 from .preprocessing import preprocess_cell_from_couchdb
 
@@ -175,8 +176,8 @@ def _boot() -> None:
         )
         return
 
+    # Parallel CouchDB fetch is the default — saves ~3-4 s on 10-cell boot.
     parallel_fetch = os.environ.get("BATTERY_BOOT_PARALLEL_FETCH", "1").strip() != "0"
-    use_batch_fs = os.environ.get("BATTERY_BOOT_BATCH_FS", "").strip() == "1"
     n_workers = max(1, int(os.environ.get("BATTERY_BOOT_FETCH_WORKERS", "4") or 4))
 
     def load_one(cell: str) -> tuple[str, np.ndarray, np.ndarray, np.ndarray]:
@@ -205,16 +206,17 @@ def _boot() -> None:
             except Exception as e:  # noqa: BLE001
                 logger.warning("Skipped %s: %s", cell, e)
 
-    if use_batch_fs and cells_ok:
+    # Always use the fully-batched precompute: one TF call per model across all
+    # cells. Falls back to per-cell only if the batched path raises (e.g.
+    # mismatched n_cycles). To ablate, call precompute_cell or
+    # precompute_cells_batched_fs directly from a test.
+    if cells_ok:
         try:
-            precompute_cells_batched_fs(cells_ok)
+            precompute_cells_fully_batched(cells_ok)
         except Exception as e:  # noqa: BLE001
-            logger.warning("BATCH_FS failed, falling back per-cell: %s", e)
+            logger.warning("Batched precompute failed, falling back per-cell: %s", e)
             for c, ch, dis, summ in cells_ok:
                 precompute_cell(c, ch, dis, summ)
-    else:
-        for c, ch, dis, summ in cells_ok:
-            precompute_cell(c, ch, dis, summ)
 
     logger.info("%d cells preloaded in battery cache", len(_CACHE))
 
@@ -336,10 +338,17 @@ def predict_rul_batch(
     asset_ids: Optional[list[str]] = None,
     from_cycle: int = 0,
 ) -> Union[RULBatchResult, ErrorResult]:
-    """Predict RUL for multiple lithium-ion cells in one round-trip. Use when the user asks
-    for fleet rankings, top-N at-risk cells, or batch RUL — reduces planner chatter vs
-    many serial ``predict_rul`` calls. Defaults to all model-ready cached cells when
-    ``asset_ids`` is omitted."""
+    """Predict RUL for MULTIPLE lithium-ion cells in ONE call. Pass the full list
+    of cells in ``asset_ids``. Defaults to all model-ready cached cells when omitted.
+
+    USAGE:
+      ✓ One call:        predict_rul_batch(asset_ids=["B0005","B0006","B0018"])
+      ✓ All cached:      predict_rul_batch()
+      ✗ DO NOT foreach:  calling per-cell with {"asset_id": "B0005"} defeats batching.
+
+    This tool is the preferred entry point for fleet-wide RUL queries (top-N at-risk,
+    rankings, all cells). Each per-cell call would otherwise spawn a fresh server
+    process; one batched call is ~10× faster for fleet workloads."""
     if not _model_available():
         return ErrorResult(error="Pretrained model unavailable")
     ids = asset_ids if asset_ids else sorted(_CACHE.keys())
