@@ -50,15 +50,15 @@ examples:
   plan-execute --model-id watsonx/ibm/granite-3-3-8b-instruct --show-plan "List sensors"
   plan-execute --model-id litellm_proxy/GCP/claude-4-sonnet "What are the failure modes?"
   plan-execute --verbose --show-history --json "How many IoT observations exist for CH-1?"
-  plan-execute --battery-scenarios -o results.txt
-  plan-execute --battery-scenarios custom_scenarios.json -o out.txt
+  plan-execute --scenarios -o results.txt
+  plan-execute --scenarios custom_scenarios.json -o out.txt
 """,
     )
     parser.add_argument(
         "question",
         nargs="?",
         default=None,
-        help="The question to answer (not used with --battery-scenarios).",
+        help="The question to answer (not used with --scenarios).",
     )
     parser.add_argument(
         "--model-id",
@@ -100,19 +100,14 @@ examples:
         help="Show INFO-level progress logs on stderr (default: WARNING+ only).",
     )
     parser.add_argument(
-        "--show-times",
-        action="store_true",
-        help="Print per-phase timings (discovery, planning, per-step, summarization, total).",
-    )
-    parser.add_argument(
-        "--battery-scenarios",
+        "--scenarios",
         metavar="FILE",
         nargs="?",
-        const="battery_scenarios.json",
+        const="src/scenarios/local/battery_utterances.json",
         default=None,
         help=(
             "Run every scenario in a JSON array (objects with a 'query' field). "
-            "Default FILE is battery_scenarios.json in the current working directory. "
+            "Default FILE is src/scenarios/local/battery_utterances.json. "
             "Writes the combined report to --output."
         ),
     )
@@ -121,7 +116,7 @@ examples:
         "--output",
         type=Path,
         default=Path("results.txt"),
-        help="Output path for --battery-scenarios (default: results.txt).",
+        help="Output path for --scenarios (default: results.txt).",
     )
     return parser
 
@@ -183,9 +178,8 @@ def _render_run_text(
     *,
     show_plan: bool,
     show_history: bool,
-    show_times: bool,
 ) -> str:
-    """Human-readable plan / history / answer / timings (same shape as CLI output)."""
+    """Human-readable plan / history / answer (same shape as CLI output)."""
     lines: list[str] = []
     if show_plan:
         lines.extend(_section_lines("Plan"))
@@ -208,24 +202,10 @@ def _render_run_text(
     lines.extend(_section_lines("Answer"))
     lines.append(result.answer)
     lines.append("")
-
-    if show_times:
-        lines.extend(_section_lines("Timing"))
-        lines.append(f"  Discovery:              {result.discovery_duration_s:.3f}s")
-        lines.append(f"  Planning:               {result.planning_duration_s:.3f}s")
-        for r in result.history:
-            tool_label = f"{r.server}/{r.tool}" if r.tool else r.server
-            lines.append(f"  Step {r.step_number} [{tool_label}]")
-            lines.append(f"    full step:            {r.duration_s:.3f}s")
-            lines.append(f"    MCP tool call only:   {r.tool_call_duration_s:.3f}s")
-        lines.append(f"  Summarization:          {result.summarization_duration_s:.3f}s")
-        lines.append(f"  Total:                  {result.total_duration_s:.3f}s")
-        lines.append("")
-
     return "\n".join(lines)
 
 
-def _load_battery_scenarios(path: Path) -> list[dict]:
+def _load_scenarios(path: Path) -> list[dict]:
     raw = path.read_text(encoding="utf-8")
     data = json.loads(raw)
     if not isinstance(data, list):
@@ -241,14 +221,14 @@ def _load_battery_scenarios(path: Path) -> list[dict]:
     return out
 
 
-async def _run_battery_scenarios(args: argparse.Namespace) -> None:
+async def _run_scenarios(args: argparse.Namespace) -> None:
     from agent.plan_execute.runner import PlanExecuteRunner
 
-    scenario_path = Path(args.battery_scenarios).expanduser().resolve()
+    scenario_path = Path(args.scenarios).expanduser().resolve()
     if not scenario_path.is_file():
         raise SystemExit(f"error: scenarios file not found: {scenario_path}")
 
-    scenarios = _load_battery_scenarios(scenario_path)
+    scenarios = _load_scenarios(scenario_path)
     out_path: Path = args.output.expanduser()
     if not out_path.is_absolute():
         out_path = (Path.cwd() / out_path).resolve()
@@ -258,7 +238,7 @@ async def _run_battery_scenarios(args: argparse.Namespace) -> None:
     runner = PlanExecuteRunner(llm=llm, server_paths=server_paths)
 
     header_lines: list[str] = [
-        f"Battery scenario batch run",
+        f"Scenario batch run",
         f"Source: {scenario_path}",
         f"Scenarios: {len(scenarios)}",
         f"Model: {args.model_id}",
@@ -286,7 +266,6 @@ async def _run_battery_scenarios(args: argparse.Namespace) -> None:
                     result,
                     show_plan=True,
                     show_history=True,
-                    show_times=args.show_times,
                 )
             )
             completed += 1
@@ -374,30 +353,17 @@ async def _run(args: argparse.Namespace) -> None:
     print(result.answer)
     print()
 
-    if args.show_times:
-        _print_section("Timing")
-        print(f"  Discovery:              {result.discovery_duration_s:.3f}s")
-        print(f"  Planning:               {result.planning_duration_s:.3f}s")
-        for r in result.history:
-            tool_label = f"{r.server}/{r.tool}" if r.tool else r.server
-            print(f"  Step {r.step_number} [{tool_label}]")
-            print(f"    full step:            {r.duration_s:.3f}s")
-            print(f"    MCP tool call only:   {r.tool_call_duration_s:.3f}s")
-        print(f"  Summarization:          {result.summarization_duration_s:.3f}s")
-        print(f"  Total:                  {result.total_duration_s:.3f}s")
-
-
 def main() -> None:
     from dotenv import load_dotenv
     load_dotenv()
     args = _build_parser().parse_args()
     _setup_logging(args.verbose)
-    if args.battery_scenarios:
-        asyncio.run(_run_battery_scenarios(args))
+    if args.scenarios:
+        asyncio.run(_run_scenarios(args))
     elif args.question is None:
         _build_parser().error(
-            "question is required unless --battery-scenarios is set "
-            "(e.g. plan-execute --battery-scenarios -o results.txt)"
+            "question is required unless --scenarios is set "
+            "(e.g. plan-execute --scenarios -o results.txt)"
         )
     else:
         asyncio.run(_run(args))

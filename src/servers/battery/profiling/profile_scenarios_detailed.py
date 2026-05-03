@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Comprehensive scenario profiler — instruments LLM and MCP tool calls in-process.
+"""Scenario profiler - instruments LLM and MCP tool calls in-process.
 
 Runs scenarios via PlanExecuteRunner directly (not as a subprocess) so we can
 monkey-patch:
-  - LiteLLMBackend.generate     → time every LLM API call
-  - executor._call_tool          → time every MCP tool call
+  - LiteLLMBackend.generate     -> time every LLM API call
+  - executor._call_tool          -> time every MCP tool call
 
 Plus background psutil thread sampling RSS every 250ms.
 
@@ -34,7 +34,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-_REPO_ROOT = Path(__file__).resolve().parent.parent
+_BATTERY_DIR = Path(__file__).resolve().parent.parent  # …/src/servers/battery/
+_REPO_ROOT = _BATTERY_DIR.parent.parent.parent  # …/repo
+_DEFAULT_PROFILES_DIR = _BATTERY_DIR / "profiles"
 sys.path.insert(0, str(_REPO_ROOT / "src"))
 
 import psutil  # type: ignore[import-untyped]
@@ -259,7 +261,7 @@ async def run_one_scenario(
         p = runner_result["planning_s"]
         derived_markers.append({"name": "discovery", "t_s": 0.0})
         derived_markers.append({"name": "planning", "t_s": round(d, 4)})
-        # Step boundaries — approximate using cumulative tool call durations
+        # Step boundaries - approximate using cumulative tool call durations
         cursor = d + p
         for h in runner_result["history"]:
             tag = f"step_{h['step_number']}_{h['tool'] or 'utility'}"
@@ -328,7 +330,7 @@ def aggregate(scenario_data: dict[str, Any]) -> dict[str, Any]:
     other = max(0.0, total - llm_span - tool_span)
     # Parallelism factor: how much of the apparent tool work was concurrent
     tool_parallelism = round(tool_total_sum / tool_span, 2) if tool_span > 0 else 1.0
-    llm_total = llm_total_sum  # LLMs are typically sequential — sum == span
+    llm_total = llm_total_sum  # LLMs are typically sequential - sum == span
     tool_total = tool_total_sum  # keep sum for "total work"; report span separately
 
     rss_vals = [s["rss_mb"] for s in scenario_data["memory_samples"]]
@@ -391,7 +393,7 @@ def render_md(scenario_data: dict[str, Any]) -> str:
 
     lines.append("## Top-level breakdown (parallel-aware)\n")
     lines.append(
-        "Spans use the union of event intervals — when N tool calls run "
+        "Spans use the union of event intervals - when N tool calls run "
         "concurrently, span = `max_end - min_start`, not `sum(walls)`.\n"
     )
     lines.append("| Bucket | Span (s) | Sum of walls (s) | % of scenario |")
@@ -405,9 +407,9 @@ def render_md(scenario_data: dict[str, Any]) -> str:
         f"{summary['tool_total_s']:.2f} | {summary['tool_pct']:.1f}% |"
     )
     lines.append(
-        f"| Other (LLM↔tool gap, dispatch, parsing) | {summary['other_s']:.2f} | — | {summary['other_pct']:.1f}% |"
+        f"| Other (LLM↔tool gap, dispatch, parsing) | {summary['other_s']:.2f} | - | {summary['other_pct']:.1f}% |"
     )
-    lines.append(f"| **TOTAL scenario wall** | **{summary['total_s']:.2f}** | — | 100% |\n")
+    lines.append(f"| **TOTAL scenario wall** | **{summary['total_s']:.2f}** | - | 100% |\n")
     lines.append(
         f"**Tool parallelism factor:** {summary['tool_parallelism']}× "
         f"({summary['tool_total_s']:.0f} s of work compressed into "
@@ -496,7 +498,7 @@ def render_md(scenario_data: dict[str, Any]) -> str:
     lines.append(f"- peak RSS: {summary['rss_peak_mb']:.1f} MB")
     lines.append(f"- min RSS:  {summary['rss_min_mb']:.1f} MB")
     lines.append(f"- avg RSS:  {summary['rss_avg_mb']:.1f} MB")
-    lines.append(f"- growth (start→end): +{summary['rss_growth_mb']:.1f} MB")
+    lines.append(f"- growth (start->end): +{summary['rss_growth_mb']:.1f} MB")
     lines.append("")
 
     # Diagnosis
@@ -508,7 +510,7 @@ def render_md(scenario_data: dict[str, Any]) -> str:
     )
     lines.append("## Bottleneck diagnosis\n")
     lines.append(
-        f"**Dominant cost:** {biggest[0]} calls — "
+        f"**Dominant cost:** {biggest[0]} calls - "
         f"{biggest[1]:.1f} s "
         f"({biggest[1] / summary['total_s'] * 100:.1f}% of total)\n"
     )
@@ -528,13 +530,13 @@ def render_md(scenario_data: dict[str, Any]) -> str:
 
 def render_combined(all_scenarios: list[dict[str, Any]]) -> str:
     lines: list[str] = []
-    lines.append("# Combined scenario profile — bottleneck analysis\n")
+    lines.append("# Combined scenario profile - bottleneck analysis\n")
     lines.append("| Scenario | Total (s) | LLM (s, %) | Tool (s, %) | Other (s, %) | LLM calls | Tool calls | Peak RSS (MB) |")
     lines.append("|---|---|---|---|---|---|---|---|")
     for sd in all_scenarios:
         agg = aggregate(sd)
         if sd.get("error"):
-            lines.append(f"| {sd['label']} | ERROR | — | — | — | — | — | — |")
+            lines.append(f"| {sd['label']} | ERROR | - | - | - | - | - | - |")
             continue
         lines.append(
             f"| {sd['label']} | {agg['total_s']:.1f} | "
@@ -558,7 +560,7 @@ def render_combined(all_scenarios: list[dict[str, Any]]) -> str:
         elif avg_tool_pct > 50:
             verdict = "**MCP tool calls are the dominant cost.**"
         else:
-            verdict = "**Cost is split — no single layer dominates.**"
+            verdict = "**Cost is split - no single layer dominates.**"
         lines.append(verdict)
     return "\n".join(lines)
 
@@ -601,12 +603,12 @@ async def _amain(args: argparse.Namespace) -> int:
     llm = LiteLLMBackend(args.model_id)
     runner = PlanExecuteRunner(llm=llm)
 
-    scenarios_path = _REPO_ROOT / "battery_scenarios.json"
+    scenarios_path = _REPO_ROOT / "src" / "scenarios" / "local" / "battery_utterances.json"
     scenarios_data = json.loads(scenarios_path.read_text(encoding="utf-8"))
     indices = [int(x.strip()) for x in args.scenarios.split(",") if x.strip()]
 
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H%M%SZ")
-    out_dir = _REPO_ROOT / "profiles" / f"scenario_detailed_{ts}"
+    out_dir = _DEFAULT_PROFILES_DIR / f"scenario_detailed_{ts}"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"Output: {out_dir.relative_to(_REPO_ROOT)}")

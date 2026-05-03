@@ -6,7 +6,7 @@ activations. Reports file size before/after and runs a numerical equivalence
 test against the original Keras model so you can see how much the quantization
 shifts predictions.
 
-Output: external/battery/acctouhou/quantized/<name>.tflite
+Output: src/servers/battery/artifacts/quantized/<name>.tflite
 
 Usage:
     PYTHONPATH=src uv run --group battery python scripts/quantize_battery_models.py
@@ -18,7 +18,7 @@ from pathlib import Path
 
 import numpy as np
 
-_REPO = Path(__file__).resolve().parent.parent
+_REPO = Path(__file__).resolve().parent.parent.parent.parent.parent
 sys.path.insert(0, str(_REPO / "src"))
 
 
@@ -36,10 +36,10 @@ def main() -> int:
         )
         return 1
 
-    out_dir = _REPO / "external/battery/acctouhou/quantized"
+    out_dir = _REPO / "src/servers/battery/artifacts/quantized"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    weights_dir = _REPO / "external/battery/acctouhou/weights"
+    weights_dir = _REPO / "src/servers/battery/artifacts/weights"
     h5_files = {
         "fs_ch": weights_dir / "feature_selector_ch.h5",
         "fs_dis": weights_dir / "feature_selector_dis.h5",

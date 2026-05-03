@@ -14,7 +14,11 @@ def _has_couchdb() -> bool:
 
 
 def _has_weights() -> bool:
-    weights = Path(os.environ.get("BATTERY_MODEL_WEIGHTS_DIR", "external/battery/acctouhou/weights"))
+    weights = Path(
+        os.environ.get(
+            "BATTERY_MODEL_WEIGHTS_DIR", "src/servers/battery/artifacts/weights"
+        )
+    )
     return (weights / "predictor.h5").exists()
 
 

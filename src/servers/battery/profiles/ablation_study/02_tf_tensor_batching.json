@@ -1,0 +1,274 @@
+{
+  "label": "ablation_post_refactor",
+  "timestamp": "2026-05-02T22:12:29Z",
+  "env": {
+    "python": "3.12.10",
+    "tf": "2.21.0",
+    "cpu": "arm",
+    "cpu_logical_cores": 14,
+    "ram_gb": 36,
+    "git_sha": "b98fab5e3b6b6aa5071cbe76e92da31a2ef3caa3",
+    "data_source": "synthetic_windows"
+  },
+  "config": {
+    "n_cells": 4,
+    "n_cycles": 100,
+    "n_repeats": 3,
+    "warmup_rounds_per_mode": 1,
+    "batch_sizes": [
+      256
+    ],
+    "primary_batch_size": 256,
+    "intra_op_threads_requested": null,
+    "inter_op_threads_requested": null,
+    "tf_effective_intra_op_threads": 0,
+    "tf_effective_inter_op_threads": 0,
+    "thread_workers_swept": [],
+    "include_feature_selectors": true,
+    "fs_batched_multicell": true,
+    "experimental_process_pool": false
+  },
+  "measurements": {
+    "feature_selectors_sequential_per_cell": {
+      "wall_ms": {
+        "mean": 2433.9519863327346,
+        "min": 2406.5416250014096,
+        "max": 2451.4804589998676,
+        "n": 3
+      },
+      "cpu_process_ms": {
+        "mean": 31130.692666666662,
+        "min": 31020.420000000002,
+        "max": 31201.91299999999,
+        "n": 3
+      },
+      "wall_ms_per_battery": {
+        "mean": 608.4879965831836,
+        "min": 601.6354062503524,
+        "max": 612.8701147499669,
+        "n": 3
+      }
+    },
+    "feature_selectors_batched_multicell": {
+      "wall_ms": {
+        "mean": 2467.3891116666105,
+        "min": 2449.5643339978415,
+        "max": 2480.200917001639,
+        "n": 3
+      },
+      "cpu_process_ms": {
+        "mean": 31208.52099999999,
+        "min": 30668.002,
+        "max": 31631.201999999972,
+        "n": 3
+      },
+      "wall_ms_per_battery": {
+        "mean": 616.8472779166526,
+        "min": 612.3910834994604,
+        "max": 620.0502292504098,
+        "n": 3
+      }
+    },
+    "rul_predict_sequential": {
+      "wall_ms": {
+        "mean": 312.075652667166,
+        "min": 308.3560830054921,
+        "max": 315.1622919976944,
+        "n": 3
+      },
+      "cpu_process_ms": {
+        "mean": 3777.9063333333434,
+        "min": 3766.8199999999956,
+        "max": 3790.343000000007,
+        "n": 3
+      },
+      "wall_ms_per_battery": {
+        "mean": 78.0189131667915,
+        "min": 77.08902075137303,
+        "max": 78.7905729994236,
+        "n": 3
+      }
+    },
+    "rul_predict_batched": {
+      "wall_ms": {
+        "mean": 302.9019996659675,
+        "min": 300.0425409991294,
+        "max": 306.2644160017953,
+        "n": 3
+      },
+      "cpu_process_ms": {
+        "mean": 3790.567666666656,
+        "min": 3743.5950000000275,
+        "max": 3822.642999999971,
+        "n": 3
+      },
+      "wall_ms_per_battery": {
+        "mean": 75.72549991649187,
+        "min": 75.01063524978235,
+        "max": 76.56610400044883,
+        "n": 3
+      }
+    },
+    "volt_predict_sequential": {
+      "wall_ms": {
+        "mean": 174.85012533385694,
+        "min": 169.36658399936277,
+        "max": 177.96937499952037,
+        "n": 3
+      },
+      "cpu_process_ms": {
+        "mean": 1973.7480000000005,
+        "min": 1967.5110000000018,
+        "max": 1979.3839999999818,
+        "n": 3
+      },
+      "wall_ms_per_battery": {
+        "mean": 43.712531333464234,
+        "min": 42.34164599984069,
+        "max": 44.49234374988009,
+        "n": 3
+      }
+    },
+    "volt_predict_batched": {
+      "wall_ms": {
+        "mean": 152.8431806655135,
+        "min": 150.05987499898765,
+        "max": 155.48275000037393,
+        "n": 3
+      },
+      "cpu_process_ms": {
+        "mean": 1862.6943333333277,
+        "min": 1850.670999999977,
+        "max": 1869.6520000000305,
+        "n": 3
+      },
+      "wall_ms_per_battery": {
+        "mean": 38.210795166378375,
+        "min": 37.51496874974691,
+        "max": 38.87068750009348,
+        "n": 3
+      }
+    },
+    "combined_rul_then_volt_sequential": {
+      "wall_ms": {
+        "mean": 494.0360276620292,
+        "min": 483.51616699801525,
+        "max": 514.5006659950013,
+        "n": 3
+      },
+      "cpu_process_ms": {
+        "mean": 5826.489666666665,
+        "min": 5815.5919999999805,
+        "max": 5834.269000000006,
+        "n": 3
+      },
+      "wall_ms_per_battery": {
+        "mean": 123.5090069155073,
+        "min": 120.87904174950381,
+        "max": 128.62516649875033,
+        "n": 3
+      }
+    },
+    "combined_rul_then_volt_batched": {
+      "wall_ms": {
+        "mean": 458.8987503326886,
+        "min": 454.73120899987407,
+        "max": 467.1995419994346,
+        "n": 3
+      },
+      "cpu_process_ms": {
+        "mean": 5754.0520000000015,
+        "min": 5747.878000000014,
+        "max": 5766.212999999993,
+        "n": 3
+      },
+      "wall_ms_per_battery": {
+        "mean": 114.72468758317216,
+        "min": 113.68280224996852,
+        "max": 116.79988549985865,
+        "n": 3
+      }
+    },
+    "model_predict_rul_sequential_ms": {
+      "wall_ms": {
+        "mean": 312.075652667166,
+        "min": 308.3560830054921,
+        "max": 315.1622919976944,
+        "n": 3
+      },
+      "cpu_process_ms": {
+        "mean": 3777.9063333333434,
+        "min": 3766.8199999999956,
+        "max": 3790.343000000007,
+        "n": 3
+      },
+      "wall_ms_per_battery": {
+        "mean": 78.0189131667915,
+        "min": 77.08902075137303,
+        "max": 78.7905729994236,
+        "n": 3
+      }
+    },
+    "model_predict_rul_batched_ms": {
+      "wall_ms": {
+        "mean": 302.9019996659675,
+        "min": 300.0425409991294,
+        "max": 306.2644160017953,
+        "n": 3
+      },
+      "cpu_process_ms": {
+        "mean": 3790.567666666656,
+        "min": 3743.5950000000275,
+        "max": 3822.642999999971,
+        "n": 3
+      },
+      "wall_ms_per_battery": {
+        "mean": 75.72549991649187,
+        "min": 75.01063524978235,
+        "max": 76.56610400044883,
+        "n": 3
+      }
+    },
+    "model_predict_volt_sequential_ms": {
+      "wall_ms": {
+        "mean": 174.85012533385694,
+        "min": 169.36658399936277,
+        "max": 177.96937499952037,
+        "n": 3
+      },
+      "cpu_process_ms": {
+        "mean": 1973.7480000000005,
+        "min": 1967.5110000000018,
+        "max": 1979.3839999999818,
+        "n": 3
+      },
+      "wall_ms_per_battery": {
+        "mean": 43.712531333464234,
+        "min": 42.34164599984069,
+        "max": 44.49234374988009,
+        "n": 3
+      }
+    },
+    "model_predict_volt_batched_ms": {
+      "wall_ms": {
+        "mean": 152.8431806655135,
+        "min": 150.05987499898765,
+        "max": 155.48275000037393,
+        "n": 3
+      },
+      "cpu_process_ms": {
+        "mean": 1862.6943333333277,
+        "min": 1850.670999999977,
+        "max": 1869.6520000000305,
+        "n": 3
+      },
+      "wall_ms_per_battery": {
+        "mean": 38.210795166378375,
+        "min": 37.51496874974691,
+        "max": 38.87068750009348,
+        "n": 3
+      }
+    }
+  },
+  "notes": "post-refactor ablation"
+}

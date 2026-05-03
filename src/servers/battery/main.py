@@ -1,4 +1,4 @@
-"""Battery MCP Server — lithium-ion analytics using the acctouhou pretrained model.
+"""Battery MCP Server - lithium-ion analytics using the acctouhou pretrained model.
 
 Tool surface (9):
     list_batteries, get_battery_cycle_summary,
@@ -42,7 +42,7 @@ from .preprocessing import preprocess_cell_from_couchdb
 
 
 def _model_available() -> bool:
-    """Live accessor — `from module import flag` captures at import time and
+    """Live accessor - `from module import flag` captures at import time and
     won't see the flag flip to True inside `_load_once()`."""
     return model_wrapper._MODEL_AVAILABLE
 
@@ -103,7 +103,7 @@ class VoltageCurveResult(BaseModel):
 
 class MilestonesResult(BaseModel):
     asset_id: str
-    crossings: dict[str, int]  # "2.90V" → cycle_index where first crossed; -1 if never
+    crossings: dict[str, int]  # "2.90V" -> cycle_index where first crossed; -1 if never
 
 
 class ImpedanceResult(BaseModel):
@@ -116,7 +116,7 @@ class ImpedanceResult(BaseModel):
 
 class ActualMilestonesResult(BaseModel):
     asset_id: str
-    crossings: dict[str, int]  # threshold label → ACTUAL cycle_index (ground truth)
+    crossings: dict[str, int]  # threshold label -> ACTUAL cycle_index (ground truth)
 
 
 class ImpedanceTrajectoryResult(BaseModel):
@@ -124,7 +124,7 @@ class ImpedanceTrajectoryResult(BaseModel):
     cycles: list[int]
     rct: list[float]
     re: list[float]
-    rectified_impedance_mag: list[Optional[float]]  # parsed complex → magnitude per cycle
+    rectified_impedance_mag: list[Optional[float]]  # parsed complex -> magnitude per cycle
 
 
 class OutlierResult(BaseModel):
@@ -167,16 +167,16 @@ def _boot() -> None:
     _load_once()
     client = CouchDBClient()
     if not client.available:
-        logger.warning("CouchDB unavailable — battery tools will return errors until DB is reachable")
+        logger.warning("CouchDB unavailable - battery tools will return errors until DB is reachable")
         return
     if not _model_available():
         logger.warning(
-            "Pretrained model unavailable — only statistical tools will work. "
+            "Pretrained model unavailable - only statistical tools will work. "
             "Check BATTERY_MODEL_WEIGHTS_DIR and BATTERY_NORMS_DIR."
         )
         return
 
-    # Parallel CouchDB fetch is the default — saves ~3-4 s on 10-cell boot.
+    # Parallel CouchDB fetch is the default - saves ~3-4 s on 10-cell boot.
     parallel_fetch = os.environ.get("BATTERY_BOOT_PARALLEL_FETCH", "1").strip() != "0"
     n_workers = max(1, int(os.environ.get("BATTERY_BOOT_FETCH_WORKERS", "4") or 4))
 
@@ -231,7 +231,7 @@ _boot()
 def list_batteries(site_name: Optional[str] = None) -> Union[BatteryListResult, ErrorResult]:
     """List available lithium-ion battery cells for the fleet. Use this whenever the
     user asks about multiple cells, fleet rankings, top-N at-risk batteries, or
-    when no specific cell_id is given — it is the entry point for most battery
+    when no specific cell_id is given - it is the entry point for most battery
     scenarios including RUL, voltage, impedance, and diagnosis queries."""
     _ = site_name or "MAIN"  # reserved for future site-scoped fleets; CouchDB is flat today
     client = CouchDBClient()
@@ -308,7 +308,7 @@ def predict_rul(
     if not _model_available():
         return ErrorResult(
             error=(
-                "Pretrained model unavailable. See battery.md (repo root) for "
+                "Pretrained model unavailable. See src/servers/battery/README.md for "
                 "weight/norm setup, or run scripts/setup_battery_artifacts.sh."
             )
         )
@@ -440,7 +440,7 @@ def get_actual_voltage_milestones(
     thresholds: list[float] = [2.9, 2.8, 2.7],
 ) -> Union[ActualMilestonesResult, ErrorResult]:
     """Scan the cell's actual recorded discharge Voltage_measured arrays for
-    threshold crossings — ground truth counterpart to predict_voltage_milestones.
+    threshold crossings - ground truth counterpart to predict_voltage_milestones.
     Use this in combination with predict_voltage_milestones when the user asks
     for MAE/RMSE on EOD timing, voltage crossings, or predicted-vs-actual voltage
     drop comparisons. Works for any cell with at least one discharge cycle."""
@@ -489,7 +489,7 @@ def get_impedance_trajectory(asset_id: str) -> Union[ImpedanceTrajectoryResult, 
         except (TypeError, ValueError):
             cycles.pop() if len(cycles) > len(rct_vals) else None
             continue
-        # Parse Rectified_Impedance — stored as a list of complex-number strings
+        # Parse Rectified_Impedance - stored as a list of complex-number strings
         # like "(1.23+0.04j)". We summarize per cycle as the mean magnitude.
         ri_raw = data.get("Rectified_Impedance") or []
         mag: Optional[float] = None
@@ -536,7 +536,7 @@ def analyze_impedance_growth(asset_id: str) -> Union[ImpedanceResult, ErrorResul
     rcts.sort(key=lambda x: x[0])
     cycles = np.array([r[0] for r in rcts], dtype=float)
     rct_vals = np.array([r[1] for r in rcts], dtype=float)
-    # Linear fit in log space: Rct(n) = a * exp(b*n) → log|Rct| = log|a| + b*n
+    # Linear fit in log space: Rct(n) = a * exp(b*n) -> log|Rct| = log|a| + b*n
     abs_rct = np.abs(rct_vals)
     abs_rct = np.where(abs_rct == 0, 1e-12, abs_rct)
     slope, _ = np.polyfit(cycles, np.log(abs_rct), 1)

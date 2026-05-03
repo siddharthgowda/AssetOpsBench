@@ -200,6 +200,15 @@ CLAUDE.md
 mcp/couchdb/sample_data/bulk_docs.json
 .env
 mcp/servers/tsfm/artifacts/tsfm_models/
+src/servers/tsfm/artifacts/tsfm_models/
+src/servers/tsfm/artifacts/output/
+
+# Battery server pretrained artifacts (downloaded, not checked in)
+src/servers/battery/artifacts/weights/
+src/servers/battery/artifacts/norms/
+src/servers/battery/artifacts/saved_models/
+src/servers/battery/artifacts/quantized/
+src/servers/battery/artifacts/cache/
 src/tmp/
 
 # Battery data and pretrained models (local only, not checked in)
@@ -212,6 +221,4 @@ src/tmp/
 # Standard layout for external (downloaded) artifacts — weights, norms, datasets
 external/
 
-# Local profiling output (keep profiles/README.md tracked)
-profiles/*
-!profiles/README.md
+# src/servers/battery/profiles/ is tracked — JSON ablation results live with the server

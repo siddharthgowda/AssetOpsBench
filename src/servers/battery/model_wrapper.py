@@ -2,13 +2,14 @@
 
 The core helpers (`mish`, `feature_selector`, `concat_data`, the sliding-window
 logic) are copy-adapted from acctouhou's `predict.py`. We load the four .h5 and
-four .npy files from BATTERY_MODEL_WEIGHTS_DIR / BATTERY_NORMS_DIR and expose a
+four .npy files from BATTERY_MODEL_WEIGHTS_DIR / BATTERY_NORMS_DIR (defaults
+to ``src/servers/battery/artifacts/{weights,norms}``) and expose a
 module-level `_CACHE` that the MCP server populates at startup.
 
 If either directory is missing or incomplete, `_MODEL_AVAILABLE` stays False and
 model-dependent tools return ErrorResult; statistical tools still work.
 
-**Speed-related env vars** (see `battery.md`): batch sizes, TF threads, lazy
+**Speed-related env vars** (see this server's `README.md`): batch sizes, TF threads, lazy
 voltage head, optional Keras ``__call__`` vs ``predict``, GPU float32 force,
 boot batched feature selectors.
 """
@@ -61,11 +62,11 @@ def _head_batch_size() -> int:
 #
 # Failed/superseded experiments removed but preserved in code for future
 # ablation:
-#   - SavedModelWrapper class (kept) — instantiate directly to test SavedModel path
-#   - TFLiteWrapper class (kept) — instantiate directly to test int8 inference
-#   - precompute_cells_batched_fs (kept) — Rushin's partial FS-only batching
+#   - SavedModelWrapper class (kept) - instantiate directly to test SavedModel path
+#   - TFLiteWrapper class (kept) - instantiate directly to test int8 inference
+#   - precompute_cells_batched_fs (kept) - Rushin's partial FS-only batching
 #
-# See battery.md "What we tried" for measured impact of each.
+# See this server's README.md "Optimizations attempted" for measured impact of each.
 
 
 def _tf_mish(x):
@@ -79,12 +80,12 @@ class SavedModelWrapper:
 
     Bypasses Keras's predict() pipeline (which retraces tf.functions per shape)
     and calls the baked-in graph directly. Trades the per-shape graph trace cost
-    for ~zero per-call overhead — useful for cold-start when the same model is
+    for ~zero per-call overhead - useful for cold-start when the same model is
     called once on a single (large) batch.
 
     Mirrors enough of tf_keras.Model for our internal call sites:
-      .predict(x, batch_size=N, verbose=0)  → numpy array of primary output
-      .__call__(x, training=False)          → tf.Tensor of primary output
+      .predict(x, batch_size=N, verbose=0)  -> numpy array of primary output
+      .__call__(x, training=False)          -> tf.Tensor of primary output
 
     For multi-output models (e.g. voltage predictor), a single primary output
     is selected at construction; auxiliary outputs are dropped. Inputs are
@@ -195,7 +196,7 @@ def _pad_edge(arr: np.ndarray, target_len: int) -> np.ndarray:
 
 
 def build_sliding_windows(cell_feat: np.ndarray) -> np.ndarray:
-    """Build (n_cycles, 50, 12) windows — preallocated, equivalent to the original stack."""
+    """Build (n_cycles, 50, 12) windows - preallocated, equivalent to the original stack."""
     n = len(cell_feat)
     out = np.empty((n, 50, 12), dtype=np.float32)
     for k in range(n):
@@ -211,10 +212,14 @@ def _load_once() -> None:
     if _MODELS is not None:
         return
     weights_dir = _resolve_path(
-        os.environ.get("BATTERY_MODEL_WEIGHTS_DIR", "external/battery/acctouhou/weights")
+        os.environ.get(
+            "BATTERY_MODEL_WEIGHTS_DIR", "src/servers/battery/artifacts/weights"
+        )
     )
     norms_dir = _resolve_path(
-        os.environ.get("BATTERY_NORMS_DIR", "external/battery/acctouhou/norms")
+        os.environ.get(
+            "BATTERY_NORMS_DIR", "src/servers/battery/artifacts/norms"
+        )
     )
 
     required_weights = ["feature_selector_ch.h5", "feature_selector_dis.h5", "predictor.h5", "predictor2.h5"]
@@ -265,7 +270,7 @@ def _load_once() -> None:
             logger.info("No GPU detected; using float32 global dtype policy")
         elif force_gpu_f32:
             tf_keras.mixed_precision.set_global_policy("float32")
-            logger.info("GPU present but BATTERY_GPU_FORCE_FLOAT32=1 — using float32 policy")
+            logger.info("GPU present but BATTERY_GPU_FORCE_FLOAT32=1 - using float32 policy")
         else:
             logger.info("Detected %d GPU(s); keeping checkpoint dtype policy (mixed_float16 unless overridden)", len(gpus))
 
@@ -429,7 +434,7 @@ def _compile_models() -> None:
     BATTERY_PRECOMPILE_GRAPHS=1.
 
     After this runs, every subsequent inference call (any batch size) reuses one
-    cached graph per model — eliminates the per-shape Keras retrace overhead.
+    cached graph per model - eliminates the per-shape Keras retrace overhead.
     """
     import tensorflow as tf  # noqa: PLC0415
 
@@ -497,6 +502,89 @@ def _run_cell_pipeline(
     }
 
 
+# ── Disk cache (.npz per cell) ──────────────────────────────────────────────
+# Survives across MCP subprocess restarts. Skips the entire feature-selector +
+# RUL predict pipeline at boot when present and fresh. See ``BATTERY_REBUILD_CACHE``.
+
+_DISK_CACHE_DIR = _REPO_ROOT / "src" / "servers" / "battery" / "artifacts" / "cache"
+
+
+def _disk_cache_path(cell_id: str) -> Path:
+    return _DISK_CACHE_DIR / f"{cell_id}.npz"
+
+
+def _disk_cache_manifest_path(cell_id: str) -> Path:
+    return _DISK_CACHE_DIR / f"{cell_id}.manifest.json"
+
+
+def _rebuild_cache_forced() -> bool:
+    return os.environ.get("BATTERY_REBUILD_CACHE", "0").strip() not in ("", "0", "false", "False")
+
+
+def _try_load_from_disk(cell_id: str, n_charge_docs: int, n_discharge_docs: int) -> bool:
+    """Populate _CACHE[cell_id] from disk if a fresh entry exists. Returns True on hit."""
+    if _rebuild_cache_forced():
+        return False
+    npz_path = _disk_cache_path(cell_id)
+    man_path = _disk_cache_manifest_path(cell_id)
+    if not npz_path.exists() or not man_path.exists():
+        return False
+    try:
+        import json as _json
+        manifest = _json.loads(man_path.read_text(encoding="utf-8"))
+        if (
+            manifest.get("n_charge_docs") != n_charge_docs
+            or manifest.get("n_discharge_docs") != n_discharge_docs
+        ):
+            return False
+        npz = np.load(npz_path, allow_pickle=False)
+        _CACHE[cell_id] = {
+            "rul_trajectory": npz["rul_trajectory"],
+            "voltage_curves": npz["voltage_curves"] if "voltage_curves" in npz.files else None,
+            "_windows_for_volt_lazy": npz["windows"] if "windows" in npz.files else None,
+            "_voltage_lazy_pending": "voltage_curves" not in npz.files,
+            "inference_ms_per_cycle": float(manifest.get("inference_ms_per_cycle", 0.0)),
+            "_disk_cache_hit": True,
+        }
+        return True
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Disk cache load failed for %s: %s; recomputing", cell_id, exc)
+        return False
+
+
+def _save_to_disk(cell_id: str, n_charge_docs: int, n_discharge_docs: int) -> None:
+    """Write _CACHE[cell_id] to disk so the next boot can skip preprocess + predict."""
+    entry = _CACHE.get(cell_id)
+    if entry is None:
+        return
+    try:
+        _DISK_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        arrays: dict[str, np.ndarray] = {
+            "rul_trajectory": np.asarray(entry["rul_trajectory"]),
+        }
+        if entry.get("voltage_curves") is not None:
+            arrays["voltage_curves"] = np.asarray(entry["voltage_curves"])
+        if entry.get("_windows_for_volt_lazy") is not None:
+            arrays["windows"] = np.asarray(entry["_windows_for_volt_lazy"])
+        np.savez_compressed(_disk_cache_path(cell_id), **arrays)
+        import json as _json
+        _disk_cache_manifest_path(cell_id).write_text(
+            _json.dumps(
+                {
+                    "n_charge_docs": n_charge_docs,
+                    "n_discharge_docs": n_discharge_docs,
+                    "inference_ms_per_cycle": float(entry.get("inference_ms_per_cycle", 0.0)),
+                    "has_voltage_curves": entry.get("voltage_curves") is not None,
+                    "schema_version": 1,
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Disk cache save failed for %s: %s", cell_id, exc)
+
+
 def precompute_cell(
     cell_id: str,
     charges: np.ndarray,
@@ -505,10 +593,20 @@ def precompute_cell(
 ) -> None:
     """Run the acctouhou pipeline for one cell and populate `_CACHE[cell_id]`.
 
+    Disk-cache fast path: if ``artifacts/cache/<cell_id>.npz`` exists and the manifest
+    matches the input shape, load it and skip the entire feature-selector + RUL predict
+    pipeline. Otherwise compute as before and write the result for next time.
+    Set ``BATTERY_REBUILD_CACHE=1`` to force a fresh compute.
+
     Set ``BATTERY_LAZY_VOLTAGE=1`` to skip voltage at boot; voltage is computed on
     first call to ``ensure_voltage_curves``.
     """
+    n_ch = int(charges.shape[0])
+    n_dis = int(discharges.shape[0])
+    if _try_load_from_disk(cell_id, n_ch, n_dis):
+        return
     _run_cell_pipeline(cell_id, charges, discharges, summary)
+    _save_to_disk(cell_id, n_ch, n_dis)
 
 
 def precompute_cells_batched_fs(
@@ -548,6 +646,10 @@ def precompute_cells_fully_batched(
     across all cells. Total TF calls: 4 (or 3 with BATTERY_LAZY_VOLTAGE=1) regardless
     of N. Compare to ``precompute_cell``: 4 × N calls.
 
+    Disk-cache fast path: any cell whose ``.npz`` is present and matches the input
+    shape is loaded from disk and excluded from the batched compute. If all cells
+    hit, no TF predict runs at all.
+
     Stage timings are stashed in module-global ``_LAST_BATCH_TIMINGS`` so the
     profiler can surface them without re-instrumenting.
     """
@@ -555,6 +657,31 @@ def precompute_cells_fully_batched(
     assert _MODELS is not None and _NORMS is not None
     if not cells:
         return
+
+    # Disk-cache filter: drop cells we can serve from disk before the batched compute.
+    miss_cells: list[tuple[str, np.ndarray, np.ndarray, np.ndarray]] = []
+    n_docs_for_save: dict[str, tuple[int, int]] = {}
+    for cell_id, ch, dis, summ in cells:
+        n_ch = int(ch.shape[0])
+        n_dis = int(dis.shape[0])
+        n_docs_for_save[cell_id] = (n_ch, n_dis)
+        if not _try_load_from_disk(cell_id, n_ch, n_dis):
+            miss_cells.append((cell_id, ch, dis, summ))
+    if not miss_cells:
+        # All cells hit disk cache; skip TF predict entirely.
+        _LAST_BATCH_TIMINGS = {
+            "n_cells": float(len(cells)),
+            "n_cycles_per_cell": float(cells[0][1].shape[0]),
+            "feature_selectors_ms": 0.0,
+            "sliding_windows_ms": 0.0,
+            "rul_predict_ms": 0.0,
+            "volt_predict_ms": 0.0,
+            "total_ms": 0.0,
+            "disk_cache_hits": float(len(cells)),
+            "disk_cache_misses": 0.0,
+        }
+        return
+    cells = miss_cells
     n_c = cells[0][1].shape[0]
     for cid, ch, dis, summ in cells:
         if ch.shape[0] != n_c or dis.shape[0] != n_c or summ.shape[0] != n_c:
@@ -562,7 +689,7 @@ def precompute_cells_fully_batched(
 
     timings: dict[str, float] = {"n_cells": float(len(cells)), "n_cycles_per_cell": float(n_c)}
 
-    # Stage 1 — batched feature selectors (2 TF calls total)
+    # Stage 1 - batched feature selectors (2 TF calls total)
     t0 = time.perf_counter()
     big_ch = np.concatenate([np.asarray(c[1], dtype=np.float32) for c in cells], axis=0)
     big_dis = np.concatenate([np.asarray(c[2], dtype=np.float32) for c in cells], axis=0)
@@ -572,7 +699,7 @@ def precompute_cells_fully_batched(
     cf_all = concat_data(ch_all, dis_all, big_s, _NORMS["summary"])
     timings["feature_selectors_ms"] = (time.perf_counter() - t0) * 1000.0
 
-    # Stage 2 — sliding windows per cell, then stack
+    # Stage 2 - sliding windows per cell, then stack
     t0 = time.perf_counter()
     windows_list: list[np.ndarray] = []
     for i in range(len(cells)):
@@ -581,7 +708,7 @@ def precompute_cells_fully_batched(
     big_windows = np.concatenate(windows_list, axis=0)
     timings["sliding_windows_ms"] = (time.perf_counter() - t0) * 1000.0
 
-    # Stage 3 — batched RUL (1 TF call)
+    # Stage 3 - batched RUL (1 TF call)
     t0 = time.perf_counter()
     big_rul_raw = _forward_rul(_MODELS["rul"], big_windows)
     big_rul = big_rul_raw * _NORMS["renorm"][:, 1] + _NORMS["renorm"][:, 0]
@@ -597,7 +724,7 @@ def precompute_cells_fully_batched(
         + timings["rul_predict_ms"]
     )
 
-    # Stage 5 — slice into _CACHE per cell (voltage deferred)
+    # Stage 5 - slice into _CACHE per cell (voltage deferred), then persist to disk
     inference_ms_per_cycle = timings["total_ms"] / max(len(cells) * n_c, 1)
     for i, (cell_id, _, _, _) in enumerate(cells):
         sl = slice(i * n_c, (i + 1) * n_c)
@@ -608,7 +735,12 @@ def precompute_cells_fully_batched(
             "_voltage_lazy_pending": True,
             "inference_ms_per_cycle": float(inference_ms_per_cycle),
         }
+        n_ch, n_dis = n_docs_for_save.get(cell_id, (0, 0))
+        if n_ch and n_dis:
+            _save_to_disk(cell_id, n_ch, n_dis)
 
+    timings["disk_cache_hits"] = 0.0
+    timings["disk_cache_misses"] = float(len(cells))
     _LAST_BATCH_TIMINGS = timings
 
 

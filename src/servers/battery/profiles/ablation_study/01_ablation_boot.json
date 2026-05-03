@@ -1,0 +1,161 @@
+{
+  "label": "ablation_boot_full",
+  "timestamp": "2026-05-02T230759Z",
+  "n_cells": 10,
+  "study": "Boot-time ablation for the battery MCP server. Each section measures one layer of the boot pipeline; comparisons within a section are paired (same process, same cells, warmed TF kernels).",
+  "hardware_note": "Apple Silicon CPU, no GPU. Numbers will differ on x86 / GPU.",
+  "data_load": {
+    "what": "Fetch + Python preprocess for all cells, no TF predict.",
+    "methodology": "Monkey-patch CouchDBClient.fetch_cycles to record per-call wall_ms; remainder of preprocess_cell_from_couchdb is attributed to scipy preprocess.",
+    "total_ms": 5663.02,
+    "couchdb_total_ms": 5075.55,
+    "preprocess_total_ms": 587.36,
+    "couchdb_calls_total": 20,
+    "couchdb_mean_call_ms": 253.78,
+    "per_cell": [
+      {
+        "asset_id": "B0005",
+        "total_ms": 906.23,
+        "couchdb_ms": 828.99,
+        "preprocess_ms": 77.24,
+        "n_couchdb_calls": 2,
+        "n_charge_docs": 100,
+        "n_discharge_docs": 100
+      },
+      {
+        "asset_id": "B0006",
+        "total_ms": 778.32,
+        "couchdb_ms": 712.47,
+        "preprocess_ms": 65.86,
+        "n_couchdb_calls": 2,
+        "n_charge_docs": 100,
+        "n_discharge_docs": 100
+      },
+      {
+        "asset_id": "B0007",
+        "total_ms": 790.1,
+        "couchdb_ms": 722.52,
+        "preprocess_ms": 67.59,
+        "n_couchdb_calls": 2,
+        "n_charge_docs": 100,
+        "n_discharge_docs": 100
+      },
+      {
+        "asset_id": "B0018",
+        "total_ms": 445.04,
+        "couchdb_ms": 391.36,
+        "preprocess_ms": 53.67,
+        "n_couchdb_calls": 2,
+        "n_charge_docs": 100,
+        "n_discharge_docs": 100
+      },
+      {
+        "asset_id": "B0033",
+        "total_ms": 551.72,
+        "couchdb_ms": 492.49,
+        "preprocess_ms": 59.23,
+        "n_couchdb_calls": 2,
+        "n_charge_docs": 100,
+        "n_discharge_docs": 100
+      },
+      {
+        "asset_id": "B0034",
+        "total_ms": 545.94,
+        "couchdb_ms": 490.22,
+        "preprocess_ms": 55.72,
+        "n_couchdb_calls": 2,
+        "n_charge_docs": 100,
+        "n_discharge_docs": 100
+      },
+      {
+        "asset_id": "B0036",
+        "total_ms": 550.79,
+        "couchdb_ms": 495.77,
+        "preprocess_ms": 55.02,
+        "n_couchdb_calls": 2,
+        "n_charge_docs": 100,
+        "n_discharge_docs": 100
+      },
+      {
+        "asset_id": "B0054",
+        "total_ms": 365.55,
+        "couchdb_ms": 314.31,
+        "preprocess_ms": 51.24,
+        "n_couchdb_calls": 2,
+        "n_charge_docs": 100,
+        "n_discharge_docs": 100
+      },
+      {
+        "asset_id": "B0055",
+        "total_ms": 362.76,
+        "couchdb_ms": 311.57,
+        "preprocess_ms": 51.19,
+        "n_couchdb_calls": 2,
+        "n_charge_docs": 100,
+        "n_discharge_docs": 100
+      },
+      {
+        "asset_id": "B0056",
+        "total_ms": 366.45,
+        "couchdb_ms": 315.85,
+        "preprocess_ms": 50.6,
+        "n_couchdb_calls": 2,
+        "n_charge_docs": 100,
+        "n_discharge_docs": 100
+      }
+    ]
+  },
+  "precompute_strategy": {
+    "what": "How to populate _CACHE from preprocessed tensors at boot.",
+    "methodology": "Same N cells, in-memory only (disk cache wiped each round, _CACHE cleared between runs).",
+    "before_optimization": {
+      "name": "per-cell loop",
+      "wall_ms": 6782.13,
+      "predict_calls": 40,
+      "predict_calls_per_cell": 4
+    },
+    "after_optimization": {
+      "name": "fully batched (precompute_cells_fully_batched)",
+      "wall_ms": 7138.69,
+      "predict_calls": 4,
+      "predict_calls_per_cell": 0.4
+    },
+    "speedup": 0.95,
+    "wall_ms_saved": -356.56,
+    "verdict": "Roughly a wash on Apple Silicon CPU at N=10. Collapsing 4N\u21924 predict() calls trades dispatch savings for larger kernels that the CPU scheduler doesn't parallelize as well. Worth keeping for GPU / much larger N."
+  },
+  "in_memory_cache": {
+    "what": "Cost of one tool-call lookup after _boot() populates _CACHE.",
+    "methodology": "Mean over 1000 sequential dict accesses to _CACHE[cell]['rul_trajectory'].",
+    "before_optimization": {
+      "name": "no cache (recompute per tool call)",
+      "wall_ms_per_call_estimated": 678.21,
+      "source": "per_cell_loop wall_ms / n_cells"
+    },
+    "after_optimization": {
+      "name": "in-memory dict lookup",
+      "wall_us_per_call": 0.041
+    },
+    "speedup": 16474671.0,
+    "verdict": "Dominant intra-process win. Limitation: dict dies when MCP subprocess exits \u2014 every fresh tool call still pays boot cost. Addressed by the disk_cache layer below."
+  },
+  "disk_cache": {
+    "what": "Disk-backed .npz cache that survives MCP subprocess restarts.",
+    "methodology": "Same boot sequence twice. Round 1: wipe artifacts/cache/, run precompute_cells_fully_batched (writes .npz per cell). Round 2: clear in-memory _CACHE only, run precompute_cells_fully_batched again \u2014 every cell short-circuits via _try_load_from_disk.",
+    "before_optimization": {
+      "name": "cold boot (no disk cache, must compute)",
+      "wall_ms": 7042.36,
+      "tf_predict_calls": 3
+    },
+    "after_optimization": {
+      "name": "warm boot (loads .npz from disk, skips TF predict)",
+      "wall_ms": 3.97,
+      "tf_predict_calls": 0
+    },
+    "speedup": 1771.78,
+    "wall_ms_saved": 7038.39,
+    "disk_footprint_bytes": 70072,
+    "disk_footprint_mb": 0.07,
+    "verdict": "Persists across MCP subprocess restarts. Makes every cold MCP call after the first invocation skip the boot precompute."
+  }
+}

@@ -6,7 +6,7 @@ and optional TF thread / batch-size sweeps (see CLI).
 
 **Wall vs CPU time:** ``wall_ms`` is ``time.perf_counter()`` (what users wait for).
 ``cpu_process_ms`` is ``time.process_time()`` (can *rise* with threads while wall
-drops — not a contradiction). Compare thread modes using both.
+drops - not a contradiction). Compare thread modes using both.
 
 Requires dependency group ``battery`` (TensorFlow + tf_keras) and acctouhou
 weights under ``BATTERY_MODEL_WEIGHTS_DIR`` / ``BATTERY_NORMS_DIR``.
@@ -39,8 +39,10 @@ from typing import Any
 
 import numpy as np
 
-# Repo root: .../src/servers/battery/benchmark_inference.py → … → repo
-_REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+# …/src/servers/battery/profiling/benchmark_inference.py -> … -> repo
+_BATTERY_DIR = Path(__file__).resolve().parent.parent  # …/src/servers/battery/
+_REPO_ROOT = _BATTERY_DIR.parent.parent.parent  # …/repo
+_DEFAULT_PROFILES_DIR = _BATTERY_DIR / "profiles"
 
 
 def _try_git_sha() -> str:
@@ -521,7 +523,7 @@ def _sweep_subprocesses(argv_base: list[str], intra_vals: list[int], inter_vals:
             suf = f"_i{it}_o{jt}"
             body = _inject_label_suffix(argv_base, suf)
             cmd = (
-                [sys.executable, "-m", "servers.battery.benchmark_inference"]
+                [sys.executable, "-m", "servers.battery.profiling.benchmark_inference"]
                 + body
                 + ["--intra-op-threads", str(it), "--inter-op-threads", str(jt)]
             )
@@ -530,7 +532,7 @@ def _sweep_subprocesses(argv_base: list[str], intra_vals: list[int], inter_vals:
 
 
 def run_single(args: argparse.Namespace) -> None:
-    profiles_dir = args.profiles_dir or (_REPO_ROOT / "profiles")
+    profiles_dir = args.profiles_dir or _DEFAULT_PROFILES_DIR
     profiles_dir.mkdir(parents=True, exist_ok=True)
 
     if args.experimental_process_pool:
@@ -548,23 +550,22 @@ def run_single(args: argparse.Namespace) -> None:
     if args.inter_op > 0:
         tf.config.threading.set_inter_op_parallelism_threads(args.inter_op)
 
-    from servers.battery.model_wrapper import (
-        _MODEL_AVAILABLE,
-        _MODELS,
-        _NORMS,
-        _load_once,
+    from servers.battery import model_wrapper as mw  # noqa: PLC0415
+    from servers.battery.model_wrapper import (  # noqa: PLC0415
         concat_data,
         feature_selector,
     )
 
-    _load_once()
-    if not _MODEL_AVAILABLE or _MODELS is None or _NORMS is None:
+    mw._load_once()
+    if not mw._MODEL_AVAILABLE or mw._MODELS is None or mw._NORMS is None:
         print(
             "Models unavailable. Set BATTERY_MODEL_WEIGHTS_DIR / BATTERY_NORMS_DIR "
-            "and ensure weights exist. See battery.md.",
+            "and ensure weights exist. See src/servers/battery/README.md.",
             file=sys.stderr,
         )
         sys.exit(1)
+    _MODELS = mw._MODELS
+    _NORMS = mw._NORMS
 
     models = _MODELS
     norms = _NORMS
@@ -608,7 +609,7 @@ def run_single(args: argparse.Namespace) -> None:
                 cf = concat_data(ch_feat, dis_feat, summary_list[i], norms["summary"])
                 windows_list[i] = _windows_from_cell_feat(cf)
         elif args.windows_npz and charges_list is not None:
-            # NPZ provided raw tensors — rebuild windows from features
+            # NPZ provided raw tensors - rebuild windows from features
             ctx0 = _BenchCtx(
                 models["rul"],
                 models["volt"],
@@ -734,6 +735,8 @@ def run_single(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
+    from dotenv import load_dotenv  # noqa: PLC0415
+    load_dotenv(_REPO_ROOT / ".env")
     parser = argparse.ArgumentParser(description="Benchmark battery TF/Keras inference (Part B + C).")
     parser.add_argument("--label", default="inference_bench", help="Run label for filenames and JSON.")
     parser.add_argument("--n-batteries", type=int, default=4, dest="n_batteries")
@@ -825,7 +828,7 @@ def main() -> None:
         "--profiles-dir",
         type=Path,
         default=None,
-        help="Output directory (default: <repo>/profiles).",
+        help="Output directory (default: src/servers/battery/profiles).",
     )
     parser.add_argument(
         "--no-csv",

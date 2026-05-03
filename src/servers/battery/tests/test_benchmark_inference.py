@@ -6,7 +6,7 @@ import sys
 
 import numpy as np
 
-from servers.battery import benchmark_inference as bi
+from servers.battery.profiling import benchmark_inference as bi
 
 
 def test_parse_csv_ints() -> None:

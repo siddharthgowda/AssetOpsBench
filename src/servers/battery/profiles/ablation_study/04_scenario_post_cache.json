@@ -1,0 +1,1556 @@
+{
+  "git_sha": "b98fab5e3b6b6aa5071cbe76e92da31a2ef3caa3",
+  "env": {
+    "python": "3.12.10",
+    "platform": "macOS-26.3.1-arm64-arm-64bit",
+    "cpu": "arm",
+    "cpu_logical_cores": 14,
+    "ram_gb": 38.7
+  },
+  "model_id": "watsonx/meta-llama/llama-4-maverick-17b-128e-instruct-fp8",
+  "cells": "B0005,B0006,B0018",
+  "timestamp_utc": "2026-05-02T23:09:34.702011+00:00",
+  "label": "scenario_1",
+  "question": "We operate a dense urban fleet of L3 and L5 electric cargo vehicles, and our drivers frequently push the packs to their limits. I have a batch of historical run-to-failure cycle data for our cells. I need you to predict the Remaining Useful Life (RUL) for all these test cells until they hit a critical 30% capacity fade threshold (1.4 Ah). Cross-verify these predictions against the actual cycle outcomes we recorded, and give me a critical risk list of the 12 batteries closest to total failure. I need to see the MAE and RMSE for these end-of-life predictions, alongside the capacity degradation curves for those top 12, so I can justify our upcoming Q3 battery replacement budget.",
+  "error": null,
+  "runner_result": {
+    "discovery_s": 10.448,
+    "planning_s": 5.4496,
+    "summarization_s": 3.791,
+    "total_s": 83.7826,
+    "n_steps": 6,
+    "answer_chars": 1026,
+    "history": [
+      {
+        "step_number": 1,
+        "task": "List all available lithium-ion battery cells for the fleet",
+        "server": "battery",
+        "tool": "list_batteries",
+        "success": true,
+        "tool_call_duration_s": 7.7156,
+        "response_chars": 947,
+        "error": null
+      },
+      {
+        "step_number": 2,
+        "task": "Predict RUL for every cell in the fleet",
+        "server": "battery",
+        "tool": "predict_rul_batch",
+        "success": true,
+        "tool_call_duration_s": 7.9285,
+        "response_chars": 2007,
+        "error": null
+      },
+      {
+        "step_number": 3,
+        "task": "Identify the 12 batteries closest to total failure (30% capacity fade threshold)",
+        "server": "utilities",
+        "tool": "none",
+        "success": true,
+        "tool_call_duration_s": 0.0,
+        "response_chars": 3922,
+        "error": null
+      },
+      {
+        "step_number": 4,
+        "task": "Get actual cycle outcomes for the top 12 batteries closest to failure",
+        "server": "battery",
+        "tool": "get_battery_cycle_summary",
+        "success": true,
+        "tool_call_duration_s": 8.1861,
+        "response_chars": 191,
+        "error": null
+      },
+      {
+        "step_number": 5,
+        "task": "Calculate MAE and RMSE for RUL predictions against actual cycle outcomes for the top 12 batteries",
+        "server": "utilities",
+        "tool": "none",
+        "success": true,
+        "tool_call_duration_s": 0.0,
+        "response_chars": 3458,
+        "error": null
+      },
+      {
+        "step_number": 6,
+        "task": "Compile the critical risk list with RUL predictions, actual capacity degradation curves, and error metrics for the top 12 batteries",
+        "server": "utilities",
+        "tool": "none",
+        "success": true,
+        "tool_call_duration_s": 0.0,
+        "response_chars": 2638,
+        "error": null
+      }
+    ]
+  },
+  "phase_markers": [
+    {
+      "name": "discovery",
+      "t_s": 0.0
+    },
+    {
+      "name": "planning",
+      "t_s": 10.448
+    },
+    {
+      "name": "step_1_list_batteries",
+      "t_s": 15.8976
+    },
+    {
+      "name": "step_2_predict_rul_batch",
+      "t_s": 23.6132
+    },
+    {
+      "name": "step_3_none",
+      "t_s": 31.5417
+    },
+    {
+      "name": "step_4_get_battery_cycle_summary",
+      "t_s": 31.5417
+    },
+    {
+      "name": "step_5_none",
+      "t_s": 39.7278
+    },
+    {
+      "name": "step_6_none",
+      "t_s": 39.7278
+    },
+    {
+      "name": "summarization",
+      "t_s": 39.7278
+    }
+  ],
+  "llm_events": [
+    {
+      "t_start_s": 10.4483,
+      "wall_s": 5.4495,
+      "prompt_chars": 29765,
+      "response_chars": 1320,
+      "temperature": 0.0,
+      "phase": "planning"
+    },
+    {
+      "t_start_s": 23.192,
+      "wall_s": 0.379,
+      "prompt_chars": 1376,
+      "response_chars": 19,
+      "temperature": 0.0,
+      "phase": "step_1_list_batteries"
+    },
+    {
+      "t_start_s": 31.2866,
+      "wall_s": 0.8161,
+      "prompt_chars": 2331,
+      "response_chars": 122,
+      "temperature": 0.0,
+      "phase": "step_2_predict_rul_batch"
+    },
+    {
+      "t_start_s": 40.0313,
+      "wall_s": 12.927,
+      "prompt_chars": 4474,
+      "response_chars": 3922,
+      "temperature": 0.0,
+      "phase": "summarization"
+    },
+    {
+      "t_start_s": 61.1445,
+      "wall_s": 12.3982,
+      "prompt_chars": 8615,
+      "response_chars": 3458,
+      "temperature": 0.0,
+      "phase": "summarization"
+    },
+    {
+      "t_start_s": 73.5428,
+      "wall_s": 6.4489,
+      "prompt_chars": 12144,
+      "response_chars": 2638,
+      "temperature": 0.0,
+      "phase": "summarization"
+    },
+    {
+      "t_start_s": 79.9918,
+      "wall_s": 3.791,
+      "prompt_chars": 15170,
+      "response_chars": 1026,
+      "temperature": 0.0,
+      "phase": "summarization"
+    }
+  ],
+  "tool_events": [
+    {
+      "t_start_s": 23.571,
+      "t_end_s": 31.2866,
+      "wall_s": 7.7156,
+      "server_path": "battery-mcp-server",
+      "tool_name": "list_batteries",
+      "args_preview": "{\"site_name\": \"MAIN\"}",
+      "args_chars": 21,
+      "response_chars": 947,
+      "phase": "step_1_list_batteries"
+    },
+    {
+      "t_start_s": 32.1028,
+      "t_end_s": 40.0313,
+      "wall_s": 7.9285,
+      "server_path": "battery-mcp-server",
+      "tool_name": "predict_rul_batch",
+      "args_preview": "{\"asset_ids\": [\"B0005\", \"B0006\", \"B0007\", \"B0018\", \"B0033\", \"B0034\", \"B0036\", \"B0054\", \"B0055\", \"B0056\"], \"from_cycle\": 0}",
+      "args_chars": 122,
+      "response_chars": 2007,
+      "phase": "step_4_get_battery_cycle_summary"
+    },
+    {
+      "t_start_s": 52.9587,
+      "t_end_s": 60.9689,
+      "wall_s": 8.0102,
+      "server_path": "battery-mcp-server",
+      "tool_name": "get_battery_cycle_summary",
+      "args_preview": "{\"asset_id\": \"asset_id\"}",
+      "args_chars": 24,
+      "response_chars": 49,
+      "phase": "summarization"
+    },
+    {
+      "t_start_s": 52.9588,
+      "t_end_s": 61.1444,
+      "wall_s": 8.1857,
+      "server_path": "battery-mcp-server",
+      "tool_name": "get_battery_cycle_summary",
+      "args_preview": "{\"asset_id\": \"rul_cycles\"}",
+      "args_chars": 26,
+      "response_chars": 51,
+      "phase": "summarization"
+    }
+  ],
+  "memory_samples": [
+    {
+      "t_s": 0.0,
+      "rss_mb": 26.4
+    },
+    {
+      "t_s": 0.255,
+      "rss_mb": 61.8
+    },
+    {
+      "t_s": 0.506,
+      "rss_mb": 64.4
+    },
+    {
+      "t_s": 0.758,
+      "rss_mb": 65.0
+    },
+    {
+      "t_s": 1.008,
+      "rss_mb": 65.0
+    },
+    {
+      "t_s": 1.26,
+      "rss_mb": 65.0
+    },
+    {
+      "t_s": 1.513,
+      "rss_mb": 65.0
+    },
+    {
+      "t_s": 1.767,
+      "rss_mb": 65.5
+    },
+    {
+      "t_s": 2.022,
+      "rss_mb": 65.5
+    },
+    {
+      "t_s": 2.272,
+      "rss_mb": 65.9
+    },
+    {
+      "t_s": 2.527,
+      "rss_mb": 65.9
+    },
+    {
+      "t_s": 2.779,
+      "rss_mb": 65.9
+    },
+    {
+      "t_s": 3.031,
+      "rss_mb": 65.9
+    },
+    {
+      "t_s": 3.283,
+      "rss_mb": 65.9
+    },
+    {
+      "t_s": 3.536,
+      "rss_mb": 65.9
+    },
+    {
+      "t_s": 3.788,
+      "rss_mb": 65.9
+    },
+    {
+      "t_s": 4.042,
+      "rss_mb": 65.9
+    },
+    {
+      "t_s": 4.293,
+      "rss_mb": 65.9
+    },
+    {
+      "t_s": 4.547,
+      "rss_mb": 65.9
+    },
+    {
+      "t_s": 4.801,
+      "rss_mb": 65.9
+    },
+    {
+      "t_s": 5.055,
+      "rss_mb": 65.9
+    },
+    {
+      "t_s": 5.31,
+      "rss_mb": 65.9
+    },
+    {
+      "t_s": 5.561,
+      "rss_mb": 65.9
+    },
+    {
+      "t_s": 5.815,
+      "rss_mb": 65.9
+    },
+    {
+      "t_s": 6.07,
+      "rss_mb": 65.9
+    },
+    {
+      "t_s": 6.325,
+      "rss_mb": 65.9
+    },
+    {
+      "t_s": 6.579,
+      "rss_mb": 65.9
+    },
+    {
+      "t_s": 6.83,
+      "rss_mb": 65.9
+    },
+    {
+      "t_s": 7.084,
+      "rss_mb": 65.9
+    },
+    {
+      "t_s": 7.335,
+      "rss_mb": 65.9
+    },
+    {
+      "t_s": 7.59,
+      "rss_mb": 65.9
+    },
+    {
+      "t_s": 7.842,
+      "rss_mb": 65.9
+    },
+    {
+      "t_s": 8.095,
+      "rss_mb": 65.9
+    },
+    {
+      "t_s": 8.346,
+      "rss_mb": 65.9
+    },
+    {
+      "t_s": 8.596,
+      "rss_mb": 65.9
+    },
+    {
+      "t_s": 8.851,
+      "rss_mb": 65.9
+    },
+    {
+      "t_s": 9.106,
+      "rss_mb": 65.9
+    },
+    {
+      "t_s": 9.358,
+      "rss_mb": 65.9
+    },
+    {
+      "t_s": 9.609,
+      "rss_mb": 65.9
+    },
+    {
+      "t_s": 9.862,
+      "rss_mb": 65.9
+    },
+    {
+      "t_s": 10.117,
+      "rss_mb": 65.9
+    },
+    {
+      "t_s": 10.371,
+      "rss_mb": 66.0
+    },
+    {
+      "t_s": 10.623,
+      "rss_mb": 84.8
+    },
+    {
+      "t_s": 10.877,
+      "rss_mb": 129.3
+    },
+    {
+      "t_s": 11.129,
+      "rss_mb": 157.6
+    },
+    {
+      "t_s": 11.384,
+      "rss_mb": 216.8
+    },
+    {
+      "t_s": 11.636,
+      "rss_mb": 216.9
+    },
+    {
+      "t_s": 11.887,
+      "rss_mb": 216.9
+    },
+    {
+      "t_s": 12.139,
+      "rss_mb": 216.9
+    },
+    {
+      "t_s": 12.39,
+      "rss_mb": 216.9
+    },
+    {
+      "t_s": 12.643,
+      "rss_mb": 216.9
+    },
+    {
+      "t_s": 12.895,
+      "rss_mb": 216.9
+    },
+    {
+      "t_s": 13.148,
+      "rss_mb": 216.9
+    },
+    {
+      "t_s": 13.401,
+      "rss_mb": 216.9
+    },
+    {
+      "t_s": 13.653,
+      "rss_mb": 216.9
+    },
+    {
+      "t_s": 13.904,
+      "rss_mb": 216.9
+    },
+    {
+      "t_s": 14.156,
+      "rss_mb": 216.9
+    },
+    {
+      "t_s": 14.411,
+      "rss_mb": 216.9
+    },
+    {
+      "t_s": 14.662,
+      "rss_mb": 216.9
+    },
+    {
+      "t_s": 14.913,
+      "rss_mb": 216.9
+    },
+    {
+      "t_s": 15.168,
+      "rss_mb": 216.9
+    },
+    {
+      "t_s": 15.423,
+      "rss_mb": 216.9
+    },
+    {
+      "t_s": 15.674,
+      "rss_mb": 216.9
+    },
+    {
+      "t_s": 15.925,
+      "rss_mb": 218.0
+    },
+    {
+      "t_s": 16.177,
+      "rss_mb": 218.0
+    },
+    {
+      "t_s": 16.432,
+      "rss_mb": 218.0
+    },
+    {
+      "t_s": 16.683,
+      "rss_mb": 218.0
+    },
+    {
+      "t_s": 16.938,
+      "rss_mb": 218.0
+    },
+    {
+      "t_s": 17.19,
+      "rss_mb": 218.0
+    },
+    {
+      "t_s": 17.441,
+      "rss_mb": 218.0
+    },
+    {
+      "t_s": 17.691,
+      "rss_mb": 218.0
+    },
+    {
+      "t_s": 17.942,
+      "rss_mb": 218.0
+    },
+    {
+      "t_s": 18.194,
+      "rss_mb": 218.0
+    },
+    {
+      "t_s": 18.446,
+      "rss_mb": 218.0
+    },
+    {
+      "t_s": 18.701,
+      "rss_mb": 218.0
+    },
+    {
+      "t_s": 18.951,
+      "rss_mb": 218.0
+    },
+    {
+      "t_s": 19.206,
+      "rss_mb": 218.0
+    },
+    {
+      "t_s": 19.458,
+      "rss_mb": 218.0
+    },
+    {
+      "t_s": 19.713,
+      "rss_mb": 218.0
+    },
+    {
+      "t_s": 19.968,
+      "rss_mb": 218.0
+    },
+    {
+      "t_s": 20.222,
+      "rss_mb": 218.0
+    },
+    {
+      "t_s": 20.473,
+      "rss_mb": 218.0
+    },
+    {
+      "t_s": 20.726,
+      "rss_mb": 218.0
+    },
+    {
+      "t_s": 20.977,
+      "rss_mb": 218.0
+    },
+    {
+      "t_s": 21.227,
+      "rss_mb": 218.0
+    },
+    {
+      "t_s": 21.479,
+      "rss_mb": 218.0
+    },
+    {
+      "t_s": 21.73,
+      "rss_mb": 218.0
+    },
+    {
+      "t_s": 21.985,
+      "rss_mb": 218.0
+    },
+    {
+      "t_s": 22.238,
+      "rss_mb": 218.0
+    },
+    {
+      "t_s": 22.491,
+      "rss_mb": 218.0
+    },
+    {
+      "t_s": 22.746,
+      "rss_mb": 218.3
+    },
+    {
+      "t_s": 23.001,
+      "rss_mb": 218.3
+    },
+    {
+      "t_s": 23.251,
+      "rss_mb": 218.4
+    },
+    {
+      "t_s": 23.506,
+      "rss_mb": 218.4
+    },
+    {
+      "t_s": 23.76,
+      "rss_mb": 218.4
+    },
+    {
+      "t_s": 24.015,
+      "rss_mb": 218.4
+    },
+    {
+      "t_s": 24.27,
+      "rss_mb": 218.4
+    },
+    {
+      "t_s": 24.525,
+      "rss_mb": 218.4
+    },
+    {
+      "t_s": 24.778,
+      "rss_mb": 218.4
+    },
+    {
+      "t_s": 25.033,
+      "rss_mb": 218.4
+    },
+    {
+      "t_s": 25.286,
+      "rss_mb": 218.4
+    },
+    {
+      "t_s": 25.537,
+      "rss_mb": 218.4
+    },
+    {
+      "t_s": 25.792,
+      "rss_mb": 218.4
+    },
+    {
+      "t_s": 26.046,
+      "rss_mb": 218.4
+    },
+    {
+      "t_s": 26.3,
+      "rss_mb": 218.4
+    },
+    {
+      "t_s": 26.553,
+      "rss_mb": 218.4
+    },
+    {
+      "t_s": 26.804,
+      "rss_mb": 218.4
+    },
+    {
+      "t_s": 27.055,
+      "rss_mb": 218.4
+    },
+    {
+      "t_s": 27.308,
+      "rss_mb": 218.4
+    },
+    {
+      "t_s": 27.558,
+      "rss_mb": 218.4
+    },
+    {
+      "t_s": 27.811,
+      "rss_mb": 218.4
+    },
+    {
+      "t_s": 28.066,
+      "rss_mb": 218.4
+    },
+    {
+      "t_s": 28.316,
+      "rss_mb": 218.4
+    },
+    {
+      "t_s": 28.569,
+      "rss_mb": 218.4
+    },
+    {
+      "t_s": 28.822,
+      "rss_mb": 218.4
+    },
+    {
+      "t_s": 29.074,
+      "rss_mb": 218.4
+    },
+    {
+      "t_s": 29.327,
+      "rss_mb": 218.4
+    },
+    {
+      "t_s": 29.578,
+      "rss_mb": 218.4
+    },
+    {
+      "t_s": 29.83,
+      "rss_mb": 218.4
+    },
+    {
+      "t_s": 30.082,
+      "rss_mb": 218.4
+    },
+    {
+      "t_s": 30.332,
+      "rss_mb": 218.4
+    },
+    {
+      "t_s": 30.584,
+      "rss_mb": 218.4
+    },
+    {
+      "t_s": 30.839,
+      "rss_mb": 218.4
+    },
+    {
+      "t_s": 31.094,
+      "rss_mb": 218.4
+    },
+    {
+      "t_s": 31.347,
+      "rss_mb": 218.4
+    },
+    {
+      "t_s": 31.601,
+      "rss_mb": 218.4
+    },
+    {
+      "t_s": 31.856,
+      "rss_mb": 218.4
+    },
+    {
+      "t_s": 32.108,
+      "rss_mb": 218.5
+    },
+    {
+      "t_s": 32.363,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 32.616,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 32.871,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 33.123,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 33.375,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 33.627,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 33.877,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 34.131,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 34.385,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 34.639,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 34.894,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 35.148,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 35.399,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 35.654,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 35.907,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 36.158,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 36.412,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 36.666,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 36.918,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 37.171,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 37.423,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 37.674,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 37.929,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 38.183,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 38.436,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 38.691,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 38.944,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 39.199,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 39.451,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 39.703,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 39.958,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 40.208,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 40.462,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 40.717,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 40.972,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 41.224,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 41.48,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 41.734,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 41.988,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 42.243,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 42.494,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 42.745,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 43.0,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 43.254,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 43.505,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 43.757,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 44.012,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 44.267,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 44.521,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 44.775,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 45.026,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 45.281,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 45.533,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 45.787,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 46.038,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 46.289,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 46.542,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 46.795,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 47.05,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 47.305,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 47.558,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 47.808,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 48.063,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 48.316,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 48.572,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 48.826,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 49.081,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 49.334,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 49.589,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 49.839,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 50.091,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 50.347,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 50.602,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 50.857,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 51.11,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 51.363,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 51.618,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 51.871,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 52.125,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 52.376,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 52.63,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 52.883,
+      "rss_mb": 218.6
+    },
+    {
+      "t_s": 53.135,
+      "rss_mb": 218.7
+    },
+    {
+      "t_s": 53.389,
+      "rss_mb": 218.7
+    },
+    {
+      "t_s": 53.641,
+      "rss_mb": 218.7
+    },
+    {
+      "t_s": 53.896,
+      "rss_mb": 218.7
+    },
+    {
+      "t_s": 54.15,
+      "rss_mb": 218.7
+    },
+    {
+      "t_s": 54.403,
+      "rss_mb": 218.7
+    },
+    {
+      "t_s": 54.655,
+      "rss_mb": 218.7
+    },
+    {
+      "t_s": 54.907,
+      "rss_mb": 218.7
+    },
+    {
+      "t_s": 55.158,
+      "rss_mb": 218.7
+    },
+    {
+      "t_s": 55.412,
+      "rss_mb": 218.7
+    },
+    {
+      "t_s": 55.667,
+      "rss_mb": 218.7
+    },
+    {
+      "t_s": 55.918,
+      "rss_mb": 218.7
+    },
+    {
+      "t_s": 56.169,
+      "rss_mb": 218.7
+    },
+    {
+      "t_s": 56.42,
+      "rss_mb": 218.7
+    },
+    {
+      "t_s": 56.67,
+      "rss_mb": 218.7
+    },
+    {
+      "t_s": 56.921,
+      "rss_mb": 218.7
+    },
+    {
+      "t_s": 57.171,
+      "rss_mb": 218.7
+    },
+    {
+      "t_s": 57.424,
+      "rss_mb": 218.7
+    },
+    {
+      "t_s": 57.674,
+      "rss_mb": 218.7
+    },
+    {
+      "t_s": 57.925,
+      "rss_mb": 218.7
+    },
+    {
+      "t_s": 58.176,
+      "rss_mb": 218.7
+    },
+    {
+      "t_s": 58.43,
+      "rss_mb": 218.7
+    },
+    {
+      "t_s": 58.685,
+      "rss_mb": 218.7
+    },
+    {
+      "t_s": 58.937,
+      "rss_mb": 218.7
+    },
+    {
+      "t_s": 59.188,
+      "rss_mb": 218.7
+    },
+    {
+      "t_s": 59.443,
+      "rss_mb": 218.7
+    },
+    {
+      "t_s": 59.698,
+      "rss_mb": 218.7
+    },
+    {
+      "t_s": 59.953,
+      "rss_mb": 218.7
+    },
+    {
+      "t_s": 60.204,
+      "rss_mb": 218.7
+    },
+    {
+      "t_s": 60.457,
+      "rss_mb": 218.7
+    },
+    {
+      "t_s": 60.712,
+      "rss_mb": 218.7
+    },
+    {
+      "t_s": 60.967,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 61.22,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 61.474,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 61.73,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 61.983,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 62.238,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 62.493,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 62.748,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 63.001,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 63.257,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 63.509,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 63.763,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 64.018,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 64.27,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 64.523,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 64.776,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 65.03,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 65.285,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 65.54,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 65.796,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 66.051,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 66.306,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 66.561,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 66.814,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 67.068,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 67.323,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 67.578,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 67.832,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 68.086,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 68.341,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 68.592,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 68.844,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 69.099,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 69.354,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 69.609,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 69.864,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 70.116,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 70.37,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 70.625,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 70.88,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 71.133,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 71.388,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 71.644,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 71.897,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 72.148,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 72.403,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 72.656,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 72.908,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 73.163,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 73.418,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 73.671,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 73.926,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 74.179,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 74.431,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 74.686,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 74.939,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 75.19,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 75.445,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 75.696,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 75.95,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 76.204,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 76.459,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 76.712,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 76.964,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 77.218,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 77.473,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 77.724,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 77.977,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 78.232,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 78.486,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 78.737,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 78.992,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 79.247,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 79.502,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 79.757,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 80.012,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 80.264,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 80.518,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 80.773,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 81.026,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 81.279,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 81.534,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 81.787,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 82.042,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 82.294,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 82.547,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 82.802,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 83.057,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 83.309,
+      "rss_mb": 218.8
+    },
+    {
+      "t_s": 83.565,
+      "rss_mb": 218.8
+    }
+  ],
+  "persona": "Commercial EV Fleet Operator",
+  "scenario_index": 0
+}
