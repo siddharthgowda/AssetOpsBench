@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import re
 import time
 from pathlib import Path
@@ -647,6 +648,10 @@ def _make_stdio_params(server: Path | str) -> "StdioServerParameters":
     Servers whose deps live in an optional ``[dependency-groups]`` block need
     ``--group <name>`` passed to ``uv run``; otherwise ``uv`` resyncs the venv
     without those deps before spawning the subprocess.
+
+    By default the MCP SDK only forwards a tiny whitelist of env vars to the
+    spawned subprocess (HOME/PATH/SHELL/...). We pass ``os.environ`` explicitly
+    so server-specific config (and ablation toggles) reaches the child.
     """
     from mcp import StdioServerParameters
 
@@ -655,6 +660,8 @@ def _make_stdio_params(server: Path | str) -> "StdioServerParameters":
         "battery-mcp-server": "battery",
         "tsfm-mcp-server": "tsfm",
     }
+
+    forwarded_env = {**os.environ}
 
     if isinstance(server, str):
         args = ["run"]
@@ -666,6 +673,7 @@ def _make_stdio_params(server: Path | str) -> "StdioServerParameters":
             command="uv",
             args=args,
             cwd=str(_REPO_ROOT),
+            env=forwarded_env,
         )
     try:
         rel = server.relative_to(_REPO_ROOT)
@@ -674,9 +682,12 @@ def _make_stdio_params(server: Path | str) -> "StdioServerParameters":
             command="python",
             args=["-m", module],
             cwd=str(_REPO_ROOT),
+            env=forwarded_env,
         )
     except ValueError:
-        return StdioServerParameters(command="python", args=[str(server)])
+        return StdioServerParameters(
+            command="python", args=[str(server)], env=forwarded_env
+        )
 
 
 async def _list_tools(server_path: Path | str) -> list[dict]:

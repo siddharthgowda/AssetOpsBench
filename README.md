@@ -32,7 +32,7 @@ What it ships as: four Keras-2 `.h5` weight files (~150 MB total) plus four `.np
 
 The acctouhou pipeline runs once at server boot to fill an in-memory cache. Every subsequent MCP tool call is a sub-microsecond dict lookup against that cache.
 
-The boot pipeline, per cell:
+The on-demand pipeline, per cell, executed inside a tool call:
 
 1. **Fetch** the cell's raw cycle docs from CouchDB via `couchdb_client.fetch_cycles`.
 2. **Preprocess each cycle** (in `preprocessing.py`):
@@ -45,10 +45,8 @@ The boot pipeline, per cell:
 4. **Run feature selectors**: `feature_selector_ch.h5` and `feature_selector_dis.h5` produce per-cycle features.
 5. **Build sliding windows** of 50 cycles × 12 features (numpy).
 6. **Run the RUL head** (`predictor.h5`) -> trajectory of remaining cycles per cell.
-7. **Run the voltage head** (`predictor2.h5`, lazy by default) -> V-SOC curves per cell.
-8. **Cache** the outputs: `rul_trajectory`, `voltage_curves`, and the windows tensor go into both an in-memory `_CACHE` dict and a `.npz` file under `src/servers/battery/artifacts/cache/`. The disk file lets a fresh server subprocess skip the entire pipeline on the next boot.
 
-This is the cost we pay once per boot. Tool calls then read from the cache.
+Boot only loads the four `.h5` weights and warms the compiled `tf.function` graphs. No CouchDB fetch and no predict happen at boot.
 
 ---
 
@@ -56,17 +54,38 @@ This is the cost we pay once per boot. Tool calls then read from the cache.
 
 The server uses **FastMCP** with stdio transport. There is no daemon - the agent spawns a fresh `battery-mcp-server` subprocess per tool call, the call runs, the subprocess exits.
 
-The 9 tools, grouped by what they do:
+The 10 tools, grouped by what they do:
 
 | Group | Tools | Notes |
 |---|---|---|
 | Discovery / inspection (no model) | `list_batteries`, `get_battery_cycle_summary` | Reads CouchDB only. |
-| Single-cell prediction | `predict_rul`, `predict_voltage_curve`, `predict_voltage_milestones` | Cache lookups. |
-| **Batch / fleet** | **`predict_rul_batch`** | Accepts a list of cell IDs; returns N results in one MCP RPC. The key tool for amortizing cold-start cost across a 10-cell question. |
-| Statistical (no model) | `analyze_impedance_growth`, `detect_capacity_outliers` | scipy / numpy on raw CouchDB measurements. |
+| Single-cell prediction (compiled graphs) | `predict_rul` | On-demand fetch + preprocess + predict. |
+| **Batch / fleet (full optimization stack)** | **`predict_rul_batch`** | Parallel CouchDB fetch + compiled graphs + batched TF predict. The key tool for fleet questions. |
+| Naive reference (deliberately unoptimized) | `predict_voltage_curve`, `predict_voltage_milestones` | Serial fetch, raw Keras model, per-cell predict. The benchmark's `naive_baseline` rung. |
+| Statistical (no model) | `get_actual_voltage_milestones`, `get_impedance_trajectory`, `analyze_impedance_growth`, `detect_capacity_outliers` | scipy / numpy on raw CouchDB measurements. |
 | LLM-narrated | `diagnose_battery` | Combines the above with a few-shot LLM call. |
 
-Why the batch tool matters for performance: each MCP RPC pays the full subprocess cold-start (~7 s with the disk cache, ~15 s without). One batched call serves the whole fleet for the price of one cold-start; ten single-cell calls would pay ten cold-starts.
+Why the batch tool matters for performance: each MCP RPC pays the full subprocess cold-start (TF import + model load + graph compile). One batched call serves the whole fleet for the price of one cold-start; N single-cell calls would pay N cold-starts.
+
+---
+
+## Try it
+
+Two `plan-execute` queries that have been tested end-to-end and return real, data-grounded answers (use `cerebras/llama3.1-8b` so the planner doesn't garble the summary):
+
+**Fleet RUL ranking** — uses `predict_rul_batch`, returns concrete predicted-cycle counts per cell:
+
+```bash
+uv run plan-execute "Predict the remaining useful life in cycles for cells B0005, B0006, B0007, B0018, B0033, B0034, B0036, B0054, B0055, and B0056. Rank them from worst to best by remaining cycles, and tell me which 3 cells are closest to end-of-life." --model-id "cerebras/llama3.1-8b"
+```
+
+**Manufacturing outlier detection** — uses `detect_capacity_outliers`, statistical only (no acctouhou chemistry-mismatch caveat):
+
+```bash
+uv run plan-execute "Even out of the factory, no two cells are identical, but we need to catch the outliers fast. Using our accelerated testbed data, establish a baseline degradation curve for a standard cell batch. Then, run an anomaly detection prediction to identify which cells are degrading significantly faster than the baseline due to intrinsic manufacturing variability. Flag the top 5% of cells that deviate from the standard State-of-Life (SOL) curve early in their cycle life. Show me the divergence graphs and the error margins. I need to prove to the manufacturing floor that we can spot defective cells within the first 50 cycles." --model-id "cerebras/llama3.1-8b"
+```
+
+Both require CouchDB running and the acctouhou weights present. See [`src/servers/battery/README.md`](src/servers/battery/README.md#first-time-setup) for first-time setup.
 
 ---
 
@@ -74,16 +93,19 @@ Why the batch tool matters for performance: each MCP RPC pays the full subproces
 
 ```
 src/servers/battery/
-  README.md                    full server doc (env vars, disk cache, troubleshooting)
+  README.md                    full server doc (env vars, troubleshooting)
   scenarios_report.md          run report from the 15 scenarios
-  main.py                      FastMCP server, 9 tools
-  model_wrapper.py             TF/Keras loader + in-memory + disk cache
+  main.py                      FastMCP server, 10 tools
+  model_wrapper.py             TF model loader + compiled graph wrappers + predict helpers
   preprocessing.py             NASA JSON cycle -> (4, 500) tensor [Q, V, I, T]
   couchdb_client.py            CouchDB fetch helpers
   diagnosis.py                 LLM-narrated failure-mode classifier
-  artifacts/                   weights + norms + .npz disk cache (gitignored)
-  profiles/ablation_study/     the 4 JSONs the report draws from
-  profiling/                   ablation_boot, benchmark_inference, scenario profiler, …
+  artifacts/                   weights + norms (gitignored)
+  profiles/                    profiling JSON outputs
+    ablation_study/            curated snapshots cited in the report
+  profiling/
+    benchmark_optimizations.py 5-rung ablation of the 4 optimizations
+    mcp_batch_demo.py          MCP per-cell vs batched comparison
   tests/
 
 src/scenarios/local/battery_utterances.json   15 evaluation scenarios

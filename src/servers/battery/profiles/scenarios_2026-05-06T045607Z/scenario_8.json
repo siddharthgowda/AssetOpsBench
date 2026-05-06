@@ -1,0 +1,29 @@
+{
+  "question": "Even out of the factory, no two cells are identical, but we need to catch the outliers fast. Using our accelerated testbed data, establish a baseline degradation curve for a standard cell batch. Then, run an anomaly detection prediction to identify which cells are degrading significantly faster than the baseline due to intrinsic manufacturing variability. Flag the top 5% of cells that deviate from the standard State-of-Life (SOL) curve early in their cycle life. Show me the divergence graphs and the error margins. I need to prove to the manufacturing floor that we can spot defective cells within the first 50 cycles.",
+  "total_s": 17.683,
+  "discovery_s": 5.333,
+  "planner_s": 0.44,
+  "summary_s": 1.095,
+  "steps": [
+    {
+      "tool": "get_battery_cycle_summary",
+      "step_s": 3.268,
+      "tool_s": 2.98
+    },
+    {
+      "tool": "detect_capacity_outliers",
+      "step_s": 3.321,
+      "tool_s": 2.92
+    },
+    {
+      "tool": "detect_capacity_outliers",
+      "step_s": 0.0,
+      "tool_s": 0.0
+    },
+    {
+      "tool": "none",
+      "step_s": 1.073,
+      "tool_s": 0.0
+    }
+  ]
+}

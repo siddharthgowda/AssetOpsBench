@@ -1,0 +1,29 @@
+{
+  "question": "Our delivery robots operate on chaotic schedules, sometimes they run continuous deep discharges, and other times they sit idle for hours. I have operational profiles with massive variations in rest periods and intrinsic cell variability. I need you to ingest this full operational profile (charge, discharge, and rest time vectors) and predict the End-of-Discharge (EOD) for the next 10 upcoming cycles across this varied group. Give me the MAE for these short-term EOD predictions. My dispatchers need a dashboard showing the exact minute each robot will hit its voltage threshold so we stop leaving bots stranded on the sidewalk.",
+  "total_s": 20.273,
+  "discovery_s": 5.384,
+  "planner_s": 0.397,
+  "summary_s": 0.511,
+  "steps": [
+    {
+      "tool": "list_batteries",
+      "step_s": 3.83,
+      "tool_s": 3.538
+    },
+    {
+      "tool": "predict_voltage_milestones",
+      "step_s": 4.942,
+      "tool_s": 4.688
+    },
+    {
+      "tool": "none",
+      "step_s": 1.047,
+      "tool_s": 0.0
+    },
+    {
+      "tool": "none",
+      "step_s": 1.023,
+      "tool_s": 0.0
+    }
+  ]
+}

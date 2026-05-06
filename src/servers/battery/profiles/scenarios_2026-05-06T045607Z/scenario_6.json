@@ -1,0 +1,29 @@
+{
+  "question": "We run a massive logistics and supply chain operation, and unexpected asset downtime destroys our margins. I do not need deep engineering data; I need high-level fleet readiness. Look at our historical run-to-failure cycle data and predict the calendar date (or cycle number) when every single cell will hit its defined end-of-life threshold. Rank the entire fleet by RUL, highlight the 20 units that need to be procured and replaced in the next 30 days, and provide the overall accuracy metrics (MAE/RMSE) for the fleet. I am taking this to the procurement VP to lock in our Q4 battery orders.",
+  "total_s": 23.285,
+  "discovery_s": 5.367,
+  "planner_s": 0.469,
+  "summary_s": 0.655,
+  "steps": [
+    {
+      "tool": "list_batteries",
+      "step_s": 3.652,
+      "tool_s": 3.504
+    },
+    {
+      "tool": "predict_rul_batch",
+      "step_s": 7.816,
+      "tool_s": 7.607
+    },
+    {
+      "tool": "none",
+      "step_s": 1.183,
+      "tool_s": 0.0
+    },
+    {
+      "tool": "none",
+      "step_s": 1.267,
+      "tool_s": 0.0
+    }
+  ]
+}

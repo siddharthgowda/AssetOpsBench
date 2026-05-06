@@ -1,0 +1,34 @@
+{
+  "question": "Our goal is to deploy battery prognostics directly onto local edge devices for real-time monitoring. I need to know if AssetsOpsBench can generate lightweight Remaining Useful Life (RUL) models. Take our 10Hz raw time-series testbed data and train a predictive model targeting a 30% capacity fade criteria. Run an inference test on a subset of these cells and give me the MAE and the inference execution time. Plot the predicted RUL trajectory against the actual recorded degradation. I need to prove to my team that we can get high-accuracy RUL numbers locally without massive computational overhead.",
+  "total_s": 24.422,
+  "discovery_s": 5.443,
+  "planner_s": 0.651,
+  "summary_s": 0.713,
+  "steps": [
+    {
+      "tool": "list_batteries",
+      "step_s": 3.74,
+      "tool_s": 3.584
+    },
+    {
+      "tool": "predict_rul_batch",
+      "step_s": 7.896,
+      "tool_s": 7.639
+    },
+    {
+      "tool": "run_tsfm_finetuning",
+      "step_s": 0.811,
+      "tool_s": 0.486
+    },
+    {
+      "tool": "run_tsfm_forecasting",
+      "step_s": 0.8,
+      "tool_s": 0.481
+    },
+    {
+      "tool": "none",
+      "step_s": 0.753,
+      "tool_s": 0.0
+    }
+  ]
+}
