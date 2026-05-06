@@ -56,6 +56,9 @@ BATTERY_DBNAME = os.environ.get("BATTERY_DBNAME", "battery")
 
 _AUTH = (COUCHDB_USERNAME, COUCHDB_PASSWORD)
 
+# this is a hack bc our NASA dataset has some batteries that
+# don't have enough data in the future create a filtered dataset
+# or use a dfiferent dataset
 _DEFAULT_SUBSET = (
     "B0005,B0006,B0007,B0018,"
     "B0025,B0029,B0030,"
@@ -190,6 +193,10 @@ def main() -> None:
         sys.exit(1)
     args.data_dir = str(data_dir)
 
+    # this is a hack bc our NASA dataset has some batteries that
+    # don't have sufficent data to be used for the model or analysis
+    # in the future we should either filter the NASA dataset before hand
+    # or just use a different dataset.
     subset_env = os.environ.get("BATTERY_CELL_SUBSET", _DEFAULT_SUBSET)
     subset = None if subset_env.strip().lower() == "all" else set(
         s.strip() for s in subset_env.split(",") if s.strip()

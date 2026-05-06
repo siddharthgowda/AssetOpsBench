@@ -69,6 +69,9 @@ _SERVER_DESCRIPTIONS: dict[str, str] = {
 }
 
 _PLACEHOLDER_RE = re.compile(r"\{step_(\d+)\}")
+# Battery asset ID regex but this is a hack and should not be merged to
+# the original code and this probably won't be needed if we are using better
+# models
 _ASSET_ID_RE = re.compile(r"\b(B\d{4})\b", re.IGNORECASE)
 
 _ARG_RESOLUTION_PROMPT = """\
@@ -132,7 +135,8 @@ def _format_context_lines(context: dict[int, StepResult]) -> str:
         for n, r in sorted(context.items())
     )
 
-
+# This is a hack and is fine since we using very small llama models
+# but this not be merged into the original repo (it's fine for our fork)
 def _enrich_resolved_args(task: str, tool: str, args: dict | None) -> dict:
     """Fill common battery/tool args when the LLM omitted them but the task names an asset."""
     out = dict(args) if args else {}

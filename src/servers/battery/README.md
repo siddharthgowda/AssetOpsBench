@@ -33,11 +33,19 @@ The voltage tools (`predict_voltage_curve`, `predict_voltage_milestones`) delibe
 ## First-time setup
 
 1. **Install deps:** `uv sync --group battery` (pulls `tensorflow`, `tf_keras`, `scikit-learn`).
-2. **Download acctouhou artifacts** (Apache 2.0) - the 4 `.h5` weights + 4 `.npy` normalization files - from the Google Drive link in the original `Prediction_of_battery/README.md`.
-3. **Download NASA B0xx cycling data** (US Public Domain) from the NASA Prognostics Center. Flatten all `B*.json` files into `external/battery/nasa/`.
-4. **Verify:** `./scripts/setup_battery_artifacts.sh`.
-5. **Seed CouchDB:** `./src/couchdb/couchdb_setup.sh` - or run directly: `uv run python src/couchdb/init_battery.py --drop`.
-6. **Start the server:** `uv run battery-mcp-server`.
+2. **Copy `.env`:** `cp .env.public .env` from the repo root, then fill in your LLM keys.
+3. **Download acctouhou artifacts** (Apache 2.0). The 4 `.h5` weights + 4 `.npy` normalization files come from the Google Drive link in the original `Prediction_of_battery/README.md`. Drop them into `BATTERY_MODEL_WEIGHTS_DIR` and `BATTERY_NORMS_DIR`.
+4. **Download NASA B0xx cycling data** (US Public Domain) from the NASA Prognostics Center. Put the `B*.json` files into the directory `BATTERY_DATA_DIR` points at (default `external/battery/nasa/`).
+5. **Verify the artifacts loaded right:** `./scripts/setup_battery_artifacts.sh`.
+6. **Start CouchDB:**
+   ```bash
+   docker compose -f docker-compose.couchdb.yml up -d
+   ```
+7. **Load battery data into CouchDB.** This reads from `BATTERY_DATA_DIR` and writes the cells in `BATTERY_CELL_SUBSET`:
+   ```bash
+   uv run python -m couchdb.init_battery --drop
+   ```
+8. **Start the server (only if you want to run it standalone, plan-execute starts it automatically):** `uv run battery-mcp-server`.
 
 ## Sample plan-execute queries (known to produce real output)
 

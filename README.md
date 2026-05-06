@@ -69,6 +69,41 @@ Why the batch tool matters for performance: each MCP RPC pays the full subproces
 
 ---
 
+## Setup
+
+For the full upstream setup (Python, uv, the other servers), see [`INSTRUCTIONS.md`](INSTRUCTIONS.md). Below is the short version for running the battery server.
+
+### 1. Install and configure
+
+```bash
+uv sync
+cp .env.public .env
+```
+
+Then open `.env` and fill in your LLM credentials. For Cerebras, set `LITELLM_API_KEY` and `LITELLM_BASE_URL=https://api.cerebras.ai/v1`. For WatsonX, set `WATSONX_APIKEY` and `WATSONX_PROJECT_ID`.
+
+### 2. Get the model weights and battery data
+
+The acctouhou weights and the NASA cycle data are not in the repo. Download steps live in [`src/servers/battery/README.md`](src/servers/battery/README.md#first-time-setup).
+
+### 3. Start CouchDB
+
+```bash
+docker compose -f docker-compose.couchdb.yml up -d
+```
+
+### 4. Load battery data into CouchDB
+
+This reads from `BATTERY_DATA_DIR` in your `.env` and inserts the cells listed in `BATTERY_CELL_SUBSET`.
+
+```bash
+uv run python -m couchdb.init_battery --drop
+```
+
+You should now have a `battery` database with the cycle data ready for the server.
+
+---
+
 ## Try it
 
 Two `plan-execute` queries that have been tested end-to-end and return real, data-grounded answers (use `cerebras/llama3.1-8b` so the planner doesn't garble the summary):

@@ -52,7 +52,7 @@ fi
 # Load battery cycling data (NASA Li-ion B0xx cells) into a dedicated database.
 # Uses init_battery.py which reads flat directory of B*.json files and applies
 # subset filter via BATTERY_CELL_SUBSET env var (default: 14 cells for prototyping).
-BATTERY_DATA_DIR_CONTAINER="/sample_data/battery_nasa"
+BATTERY_DATA_DIR_CONTAINER="/sample_data/battery"
 if [ -d "$BATTERY_DATA_DIR_CONTAINER" ]; then
   echo "Loading battery NASA cycling data..."
   COUCHDB_URL="http://localhost:5984" \
