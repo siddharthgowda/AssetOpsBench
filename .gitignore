@@ -222,3 +222,6 @@ src/tmp/
 external/
 
 # src/servers/battery/profiles/ is tracked — JSON ablation results live with the server
+
+
+node_modules/
