@@ -1,0 +1,25 @@
+{
+  "n_cells": 10,
+  "n_repeats": 1,
+  "cells": [
+    "B0005",
+    "B0006",
+    "B0007",
+    "B0018",
+    "B0033",
+    "B0034",
+    "B0036",
+    "B0054",
+    "B0055",
+    "B0056"
+  ],
+  "mcp_per_cell": {
+    "wall_s": 44.642,
+    "n_subprocess_spawns": 10
+  },
+  "mcp_batched": {
+    "wall_s": 7.367,
+    "n_subprocess_spawns": 1
+  },
+  "speedup": 6.06
+}

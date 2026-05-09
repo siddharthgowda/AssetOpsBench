@@ -3,7 +3,7 @@
 Run::
 
     uv run python -m servers.battery.profiling.profile_scenario --scenarios 5
-    uv run python -m servers.battery.profiling.profile_scenario --scenarios 1,2,4,5,6,7,8
+    uv run python -m servers.battery.profiling.profile_scenario --scenarios 1,2,4,5,6,7,8,9,10,12,13
     uv run python -m servers.battery.profiling.profile_scenario \\
         --question "Predict RUL for B0005, B0006, B0018"
 """

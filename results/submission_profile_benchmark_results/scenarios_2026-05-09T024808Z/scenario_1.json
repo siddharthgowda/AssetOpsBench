@@ -1,0 +1,39 @@
+{
+  "question": "Our engineering team is validating a new Battery Management System (BMS) meant to handle aggressive, deep-discharge scenarios, sometimes dropping below the OEM's 2.7V safety threshold. I need AssetsOpsBench to ingest our raw Electrochemical Impedance Spectroscopy (EIS) parameters (specifically estimated electrolyte and charge transfer resistance) alongside the temperature data. Predict the precise End-of-Discharge (EOD) time for the cells undergoing these deep discharge profiles. Show me the voltage drop curves for the 5 cells exhibiting the most severe internal resistance spikes, and back it up with the MAE and RMSE metrics. We have a sprint review on Thursday, and I need hard data to prove our new thermal throttling logic is triggering at the right time.",
+  "total_s": 27.75,
+  "discovery_s": 5.664,
+  "planner_s": 1.41,
+  "summary_s": 0.568,
+  "steps": [
+    {
+      "tool": "list_batteries",
+      "step_s": 3.792,
+      "tool_s": 3.679
+    },
+    {
+      "tool": "analyze_impedance_growth",
+      "step_s": 3.355,
+      "tool_s": 3.064
+    },
+    {
+      "tool": "predict_voltage_milestones",
+      "step_s": 4.994,
+      "tool_s": 4.809
+    },
+    {
+      "tool": "predict_voltage_curve",
+      "step_s": 3.461,
+      "tool_s": 3.461
+    },
+    {
+      "tool": "none",
+      "step_s": 0.568,
+      "tool_s": 0.0
+    },
+    {
+      "tool": "none",
+      "step_s": 0.816,
+      "tool_s": 0.0
+    }
+  ]
+}

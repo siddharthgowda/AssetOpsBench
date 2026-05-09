@@ -1,0 +1,44 @@
+{
+  "question": "We buy degraded battery packs that have already hit a 30% capacity fade for use in stationary microgrids. We need to know how they behave after extensive aging. We have impedance data for cells right as they approach their automotive end-of-life criteria. Predict how the internal resistance will trend over the next 20 simulated cycles. Provide the accuracy metrics for your resistance predictions and flag any cells where the predicted charge transfer resistance spikes exponentially. I need to know which cells are safe for second-life storage and which are fire hazards.",
+  "total_s": 36.766,
+  "discovery_s": 5.367,
+  "planner_s": 0.385,
+  "summary_s": 1.822,
+  "steps": [
+    {
+      "tool": "list_batteries",
+      "step_s": 3.676,
+      "tool_s": 3.347
+    },
+    {
+      "tool": "diagnose_battery",
+      "step_s": 5.394,
+      "tool_s": 5.197
+    },
+    {
+      "tool": "analyze_impedance_growth",
+      "step_s": 3.688,
+      "tool_s": 3.151
+    },
+    {
+      "tool": "get_impedance_trajectory",
+      "step_s": 3.224,
+      "tool_s": 3.041
+    },
+    {
+      "tool": "analyze_impedance_growth",
+      "step_s": 3.401,
+      "tool_s": 3.038
+    },
+    {
+      "tool": "none",
+      "step_s": 1.292,
+      "tool_s": 0.0
+    },
+    {
+      "tool": "diagnose_battery",
+      "step_s": 5.554,
+      "tool_s": 5.139
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "question": "We are dealing with a massive influx of warranty claims because no two battery cells in our field systems have the same State-of-Life (SOL), erratic variations in depth-of-discharge and rest periods are causing unpredictable aging. I have aging data from a highly varied test group. Predict the true RUL across this entire dataset and validate your predictions against the actual failure timelines to prove your model can handle intrinsic variability. Isolate the top 10% of cells that degraded significantly faster than the baseline, and plot their performance drop-off. Give me the overall MAE and RMSE numbers so I can show the financial risk committee exactly how accurate our new warranty forecasting model will be.",
+  "total_s": 39.809,
+  "discovery_s": 4.99,
+  "planner_s": 0.529,
+  "summary_s": 0.816,
+  "steps": [
+    {
+      "tool": "list_batteries",
+      "step_s": 3.289,
+      "tool_s": 3.17
+    },
+    {
+      "tool": "predict_rul_batch",
+      "step_s": 18.639,
+      "tool_s": 18.386
+    },
+    {
+      "tool": "get_actual_voltage_milestones",
+      "step_s": 3.266,
+      "tool_s": 2.581
+    },
+    {
+      "tool": "none",
+      "step_s": 0.76,
+      "tool_s": 0.0
+    },
+    {
+      "tool": "detect_capacity_outliers",
+      "step_s": 3.643,
+      "tool_s": 3.198
+    },
+    {
+      "tool": "none",
+      "step_s": 1.103,
+      "tool_s": 0.0
+    }
+  ]
+}

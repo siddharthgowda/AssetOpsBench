@@ -1,0 +1,24 @@
+{
+  "name": "+ graph_precompile",
+  "parallel_fetch": true,
+  "graph_precompile": true,
+  "batched_predict": false,
+  "disk_cache": false,
+  "n_cells": 10,
+  "n_repeats": 3,
+  "cells": [
+    "B0005",
+    "B0006",
+    "B0007",
+    "B0018",
+    "B0033",
+    "B0034",
+    "B0036",
+    "B0054",
+    "B0055",
+    "B0056"
+  ],
+  "wall_s": 10.884,
+  "fetch_s": 3.859,
+  "predict_s": 7.025
+}

@@ -1,0 +1,49 @@
+{
+  "question": "My team builds auxiliary controllers that require a strict minimum voltage to function safely. I have test data where cells were pushed into deep discharge below the OEM 2.7V threshold to simulate extreme field conditions. Analyze these deep discharge cycles and predict the exact time vector when the measured voltage drops past 2.9V, 2.8V, and 2.7V for each cell. Compare your predictions to the actual recorded time vectors. I need the MAE for these specific voltage milestones and a visualization of the voltage drop-off curve for the 8 worst-performing cells so we can design our low-voltage cutoffs properly.",
+  "total_s": 33.122,
+  "discovery_s": 5.529,
+  "planner_s": 0.785,
+  "summary_s": 0.717,
+  "steps": [
+    {
+      "tool": "list_batteries",
+      "step_s": 3.756,
+      "tool_s": 3.613
+    },
+    {
+      "tool": "get_actual_voltage_milestones",
+      "step_s": 2.99,
+      "tool_s": 2.829
+    },
+    {
+      "tool": "predict_voltage_milestones",
+      "step_s": 4.725,
+      "tool_s": 4.524
+    },
+    {
+      "tool": "none",
+      "step_s": 1.035,
+      "tool_s": 0.0
+    },
+    {
+      "tool": "none",
+      "step_s": 1.031,
+      "tool_s": 0.0
+    },
+    {
+      "tool": "get_actual_voltage_milestones",
+      "step_s": 3.136,
+      "tool_s": 2.728
+    },
+    {
+      "tool": "predict_voltage_milestones",
+      "step_s": 5.09,
+      "tool_s": 4.701
+    },
+    {
+      "tool": "none",
+      "step_s": 1.196,
+      "tool_s": 0.0
+    }
+  ]
+}
