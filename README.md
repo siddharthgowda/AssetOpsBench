@@ -1,160 +1,379 @@
-# AssetOpsBench (school-project fork)
+# HPML Final Project: AgentOpsBench: High-Throughput Agentic AI for Battery Analytics
 
-> This is a fork of [AssetOpsBench](https://github.com/IBM/AssetOpsBench) maintained as a Columbia COMS6998 school project. The original project README is preserved as [`OLD_README.md`](OLD_README.md). Everything below describes what was added or changed in this fork - concentrated on the new **battery MCP server**.
+> Please read this first. Our project, after discussion with our IBM mentor, ended up straying away from the typical project format for this class. It has two aspects.
+>
+> 1. An agentic MCP server implementation for battery analytics (the agent / application side).
+> 2. Performance optimizations on top of that server (the HPC side).
+>
+> Because of this hybrid scope, we follow the HPML template as closely as possible, but there are deviations. Some things that matter to our work do not exist in the template, and some template sections do not apply to us.
+>
+> A second reason for the deviations is that we wanted to keep the standards and structure of AssetOpsBench intact. We did not want to restructure the upstream repository simply to fit the HPML submission format. We adopted template conventions where they were cheap to adopt, but we deliberately did not fundamentally change the AssetOpsBench repository layout.
 
----
-
-## What we added
-
-- A new MCP server, `battery`, that joins the existing `iot` / `utilities` / `fmsr` / `tsfm` / `wo` / `vibration` servers and serves Li-ion battery analytics (RUL, voltage curves, impedance, fleet outliers, LLM-narrated diagnosis).
-- Profiling + ablation tooling that quantifies where the server's startup time goes and how the optimizations bought it back. The headline study and per-tool measurements live in [`src/servers/battery/profiles/ablation_study/`](src/servers/battery/profiles/ablation_study/).
-
-For the server-level deep dive (env vars, disk cache mechanics, troubleshooting, full file layout), see [`src/servers/battery/README.md`](src/servers/battery/README.md).
-
----
-
-## The model we chose and why
-
-**Model**: the **acctouhou** pretrained Li-ion RUL + voltage model (Apache 2.0 - sourced from [acctouhou/Prediction_of_battery](https://github.com/acctouhou/Prediction_of_battery)).
-
-What it ships as: four Keras-2 `.h5` weight files (~150 MB total) plus four `.npy` normalization tensors. Two feature-selector models for charge/discharge, one RUL head, one voltage head.
-
-**Why this model:**
-- **Lightweight** - runs on CPU at ~7 ms per cycle of inference. No GPU required.
-- **Pretrained** - no training pipeline, no labeled-data infrastructure, no GPU cluster needed.
-- **Two heads in one package** - RUL trajectory *and* voltage curves, which together cover most of the scenario set.
-- **Permissive license** (Apache 2.0) - drop-in for a school project.
-- Modest disk footprint (~150 MB weights + 70 KB cache after warmup).
+> **Course:** High Performance Machine Learning
+> **Semester:** Spring 2026
+> **Instructor:** Dr. Kaoutar El Maghraoui
+> **IBM Mentor:** Dhval Patel, Senior Technical Staff Member (STSM), IBM
 
 ---
 
-## How the server runs the model
+## Team Information
 
-The acctouhou pipeline runs once at server boot to fill an in-memory cache. Every subsequent MCP tool call is a sub-microsecond dict lookup against that cache.
+- **Team Name:** [Team Name]
+- **Members:**
+  - Full Name 1 (UNI) — *role / area of contribution*
+  - Full Name 2 (UNI) — *role / area of contribution*
+  - Full Name 3 (UNI) — *role / area of contribution*
+  - Full Name 4 (UNI) — *role / area of contribution*
 
-The on-demand pipeline, per cell, executed inside a tool call:
+## Submission
 
-1. **Fetch** the cell's raw cycle docs from CouchDB via `couchdb_client.fetch_cycles`.
-2. **Preprocess each cycle** (in `preprocessing.py`):
-   - Extract `Voltage_measured`, `Current_measured`, `Temperature_measured`, `Time` arrays from the JSON.
-   - **Coulomb counting**: derive Q via `scipy.cumulative_trapezoid(|I|, t) / 3600`.
-   - **Interpolate** all four channels (Q, V, I, T) to **500 uniform timesteps** with `scipy.interp1d`.
-   - Stack into `(n_cycles, 4, 500)` tensors for charge and discharge.
-   - Build a `(n_cycles, 6)` summary feature vector `[Qd, Qc, Tavg, Tmin, Tmax, chargetime]`.
-3. **Normalize** the tensors with the four `.npy` norm files.
-4. **Run feature selectors**: `feature_selector_ch.h5` and `feature_selector_dis.h5` produce per-cycle features.
-5. **Build sliding windows** of 50 cycles × 12 features (numpy).
-6. **Run the RUL head** (`predictor.h5`) -> trajectory of remaining cycles per cell.
+- **GitHub repository:** [https://github.com/&lt;org&gt;/&lt;repo&gt;](https://github.com/org/repo)
+- **Final report:** [`deliverables/HPML_Final_Report.pdf`](deliverables/HPML_Final_Report.pdf)
+- **Final presentation:** [`deliverables/HPML_Final_Presentation.pptx`](deliverables/HPML_Final_Presentation.pptx)
+- **Experiment-tracking dashboard:** [link to public Wandb / MLflow / TensorBoard / Comet / Neptune dashboard]
 
-Boot only loads the four `.h5` weights and warms the compiled `tf.function` graphs. No CouchDB fetch and no predict happen at boot.
+The final report PDF and the presentation file are checked into the `deliverables/` folder of this repository **and** uploaded to CourseWorks.
 
 ---
 
-## How tool calls work
+## 1. Problem Statement
 
-The server uses **FastMCP** with stdio transport. There is no daemon - the agent spawns a fresh `battery-mcp-server` subprocess per tool call, the call runs, the subprocess exits.
-
-The 10 tools, grouped by what they do:
-
-| Group | Tools | Notes |
-|---|---|---|
-| Discovery / inspection (no model) | `list_batteries`, `get_battery_cycle_summary` | Reads CouchDB only. |
-| Single-cell prediction (compiled graphs) | `predict_rul` | On-demand fetch + preprocess + predict. |
-| **Batch / fleet (full optimization stack)** | **`predict_rul_batch`** | Parallel CouchDB fetch + compiled graphs + batched TF predict. The key tool for fleet questions. |
-| Naive reference (deliberately unoptimized) | `predict_voltage_curve`, `predict_voltage_milestones` | Serial fetch, raw Keras model, per-cell predict. The benchmark's `naive_baseline` rung. |
-| Statistical (no model) | `get_actual_voltage_milestones`, `get_impedance_trajectory`, `analyze_impedance_growth`, `detect_capacity_outliers` | scipy / numpy on raw CouchDB measurements. |
-| LLM-narrated | `diagnose_battery` | Combines the above with a few-shot LLM call. |
-
-Why the batch tool matters for performance: each MCP RPC pays the full subprocess cold-start (TF import + model load + graph compile). One batched call serves the whole fleet for the price of one cold-start; N single-cell calls would pay N cold-starts.
+AssetOpsBench, which is IBM's MCP-based agent benchmark for industrial asset operations, currently only covers HVAC equipment such as chillers. This project extends it to battery systems (scoped only to lithium-ion batteries) by adding a new MCP server with 10 battery analytics tools, a pretrained DNN prognostics pipeline for RUL (remaining useful life) prediction. We used the NASA Prognostics Center cycling dataset and created a 15-scenario for wall-clock evaluation for high performance computing. The constraint is that introducing a heavier asset class must not bottle the overall system latency, so a meaningful portion of this work is targeted performance optimization at the tool, batching, and caching layers.
 
 ---
 
-## Setup
+## 2. Model/Application Description
 
-For the full upstream setup (Python, uv, the other servers), see [`INSTRUCTIONS.md`](INSTRUCTIONS.md). Below is the short version for running the battery server.
+- **Model architecture:** acctouhou DNN battery prognostics pipeline (4 frozen pretrained Keras models, 2 feature selectors, RUL predictor, voltage predictor). The agentic planner / executor uses `cerebras/llama3.1-8b` (originally `watsonx/meta-llama/llama-4-maverick-17b-128e-instruct-fp8`).
+- **Framework:** TensorFlow 2.21, `tf_keras`, FastMCP, LiteLLM, AssetOpsBench `plan-execute`.
+- **Dataset:** NASA Prognostics Center B0xx Li-ion cycling dataset (NCA 18650, US Public Domain). Upstream: <https://data.nasa.gov/dataset/li-ion-battery-aging-datasets>. Pre-staged copy (Columbia LionMail only): <https://drive.google.com/drive/folders/1nV3nh7WHR0k2WfFvfyzT_K24OOYAbpOP?usp=sharing>. Upstream DNN model: <https://github.com/acctouhou/Prediction_of_battery>.
+- **Custom layers or modifications:** battery MCP server (`src/servers/battery/`) is the primary contribution, plus light edits to the AssetOpsBench planner / executor system prompts.
+- **Hardware target:** Apple M4 Max CPU, 32 GB RAM, no GPU.
 
-### 1. Install and configure
+---
+
+## 3. Final Results Summary
+
+The template's accuracy and training-time rows do not apply (see Section 5.D). We optimized wall-clock latency. The LLM we used has a 32K context window, which long scenarios overflow, so we benchmark only what we built (the battery tools). Both tables below exclude any LLM round-trip and map to committed JSONs in [`results/submission_profile_benchmark_results/`](results/submission_profile_benchmark_results/).
+
+Profiling showed that with a small LLM through Cerebras, wall-clock time is dominated by the tool calls (especially RUL prediction), not the planning step. We optimized the tool layer for that reason and ran the ablations below to find the fastest configuration.
+
+#### Optimization ablation, RUL pipeline
+
+Each row adds one optimization on top of the previous configuration.
+
+| Configuration | Wall (s) | Fetch (s) | Predict (s) |
+| --- | ---: | ---: | ---: |
+| Naive baseline | 12.64 | 5.655 | 6.985 |
+| + Parallel fetch | 11.18 | 3.852 | 7.325 |
+| + Graph precompile | 10.88 | 3.859 | 7.025 |
+| + Batched predict | 10.93 | 3.833 | 7.099 |
+| + Disk cache | 3.83 | 3.831 | 0.002 |
+
+All optimizations on gives a 3.30× wall-time speedup over the naive baseline. Reproducible via `benchmark_optimizations.py` (Section 5.E).
+
+#### MCP-level batching
+
+Per-cell vs batched MCP tool calls (one call covers all 10 cells). Includes FastMCP subprocess spawn, excludes the LLM.
+
+| Strategy | Wall (s) | Subprocess spawns | Speedup |
+| --- | ---: | ---: | --- |
+| Per-cell (10 separate tool calls) | 44.64 | 10 | baseline |
+| Batched (1 tool call) | 7.37 | 1 | 6.06× |
+
+Reproducible via `mcp_batch_demo.py` (Section 5.D).
+
+**Hardware:** Apple M4 Max CPU, 32 GB RAM (no GPU). LLM used for benchmarking is `cerebras/llama3.1-8b` (see Section 5.D). Numbers are hardware-dependent and will vary on different machines.
+
+**Headline result (one sentence):** *Layering parallel CouchDB fetch, compiled flexible-shape TF graphs, batched predict, and a disk cache reduces a 10-cell RUL pipeline from 12.64 s to 3.83 s, a 3.30× wall-time speedup end-to-end versus the naive baseline.*
+
+---
+
+## 4. Repository Structure
+
+```
+.
+├── README.md
+├── LICENSE
+├── requirements.txt
+├── configs/                # YAML / JSON configs for every reported experiment
+├── deliverables/           # Final report (PDF) and final presentation (PPT/PDF) — same files uploaded to CourseWorks
+│   ├── HPML_Final_Report.pdf
+│   └── HPML_Final_Presentation.pptx
+├── scripts/
+│   ├── download_dataset.sh
+│   ├── run_baseline.sh
+│   └── run_optimized.sh
+├── src/
+│   ├── data/               # Data loading & preprocessing
+│   ├── models/             # Model definitions / wrappers
+│   ├── train.py            # Training entry point
+│   ├── eval.py             # Evaluation entry point
+│   └── profile.py          # Profiling entry point
+├── notebooks/              # Exploratory & analysis notebooks
+├── results/                # Logs, figures, profiler traces (small files only)
+└── docs/                   # Optional: extended methodology, design notes
+```
+
+---
+
+## 5. Reproducibility Instructions
+
+### A. Environment Setup
+
+AssetOpsBench is uv-managed we run it CPU-only on Apple Silicon, and it depends on Docker-hosted CouchDB plus manually-downloaded model artifacts and NASA data.
+
+**Requirements:** Python 3.12+, [uv](https://docs.astral.sh/uv/), Docker, and a Columbia LionMail (`@columbia.edu`) account for the Step 5 download.
+
+#### 1. Install uv
 
 ```bash
-uv sync
+brew install uv
+```
+
+#### 2. Install dependencies
+
+```bash
+uv sync --group battery
+```
+
+`--group battery` is required. Plain `uv sync` omits `tensorflow` and `tf_keras`, so the battery server fails on import.
+
+#### 3. Configure `.env`
+
+```bash
 cp .env.public .env
 ```
 
-Then open `.env` and fill in your LLM credentials. For Cerebras, set `LITELLM_API_KEY` and `LITELLM_BASE_URL=https://api.cerebras.ai/v1`. For WatsonX, set `WATSONX_APIKEY` and `WATSONX_PROJECT_ID`.
+Fill in LLM credentials. Pick one of the two options below.
 
-### 2. Get the model weights and battery data
+**Option A.** Any LiteLLM-supported provider (Cerebras, OpenAI, Anthropic, Cohere, Groq, etc.).
 
-The acctouhou weights and the NASA cycle data are not in the repo. Download steps live in [`src/servers/battery/README.md`](src/servers/battery/README.md#first-time-setup).
+```dotenv
+LITELLM_API_KEY=<your LiteLLM proxy or provider key>
+LITELLM_BASE_URL=<your LiteLLM proxy URL>
+```
 
-### 3. Start CouchDB
+Invoke with `--model-id "cerebras/llama3.1-8b"` (swap the prefix for other providers).
+
+**Option B.** IBM watsonx.
+
+```dotenv
+WATSONX_APIKEY=<your watsonx API key>
+WATSONX_PROJECT_ID=<your watsonx project ID>
+WATSONX_URL=https://us-south.ml.cloud.ibm.com
+```
+
+Invoke with e.g. `--model-id "watsonx/meta-llama/llama-3-3-70b-instruct"`.
+
+#### 4. Create the artifact / data directories
+
+```bash
+mkdir -p src/servers/battery/artifacts/weights \
+         src/servers/battery/artifacts/norms \
+         src/servers/battery/artifacts/cache \
+         external/battery/nasa
+```
+
+#### 5. Download the model + NASA cycling data
+
+> Access restricted to Columbia LionMail (`@columbia.edu`).
+
+<https://drive.google.com/drive/folders/1nV3nh7WHR0k2WfFvfyzT_K24OOYAbpOP?usp=sharing>
+
+The Drive has two folders.
+
+- NASA cycling data (`B*.json` files), move all into `external/battery/nasa/`.
+- Model artifacts (4 `.h5` weights and 4 `.npy` norms). The `.h5` files go in `src/servers/battery/artifacts/weights/`, and the `.npy` files go in `src/servers/battery/artifacts/norms/`.
+
+#### 6. Start CouchDB
 
 ```bash
 docker compose -f docker-compose.couchdb.yml up -d
 ```
 
-### 4. Load battery data into CouchDB
-
-This reads from `BATTERY_DATA_DIR` in your `.env` and inserts the cells listed in `BATTERY_CELL_SUBSET`.
+#### 7. Load the battery dataset
 
 ```bash
 uv run python -m couchdb.init_battery --drop
 ```
 
-You should now have a `battery` database with the cycle data ready for the server.
-
----
-
-## Try it
-
-Two `plan-execute` queries that have been tested end-to-end and return real, data-grounded answers (use `cerebras/llama3.1-8b` so the planner doesn't garble the summary):
-
-**Fleet RUL ranking** — uses `predict_rul_batch`, returns concrete predicted-cycle counts per cell:
+#### 8. Smoke test, boot the server (optional)
 
 ```bash
-uv run plan-execute "Predict the remaining useful life in cycles for cells B0005, B0006, B0007, B0018, B0033, B0034, B0036, B0054, B0055, and B0056. Rank them from worst to best by remaining cycles, and tell me which 3 cells are closest to end-of-life." --model-id "cerebras/llama3.1-8b"
+uv run battery-mcp-server
 ```
 
-**Manufacturing outlier detection** — uses `detect_capacity_outliers`, statistical only (no acctouhou chemistry-mismatch caveat):
+> If the command runs without an error (warnings are fine), it is working. The server uses stdio and waits idle for a client. `Ctrl-C` to exit.
+
+#### 9. Run a sample scenario
 
 ```bash
-uv run plan-execute "Even out of the factory, no two cells are identical, but we need to catch the outliers fast. Using our accelerated testbed data, establish a baseline degradation curve for a standard cell batch. Then, run an anomaly detection prediction to identify which cells are degrading significantly faster than the baseline due to intrinsic manufacturing variability. Flag the top 5% of cells that deviate from the standard State-of-Life (SOL) curve early in their cycle life. Show me the divergence graphs and the error margins. I need to prove to the manufacturing floor that we can spot defective cells within the first 50 cycles." --model-id "cerebras/llama3.1-8b"
+uv run plan-execute \
+  "Predict the remaining useful life in cycles for cells B0005, B0006, B0007, B0018, B0033, B0034, B0036, B0054, B0055, and B0056. Rank them from worst to best by remaining cycles, and tell me which 3 cells are closest to end-of-life." \
+  --model-id "cerebras/llama3.1-8b"
 ```
 
-Both require CouchDB running and the acctouhou weights present. See [`src/servers/battery/README.md`](src/servers/battery/README.md#first-time-setup) for first-time setup.
+### B. Experiment Tracking Dashboard
+
+There is no public experiment-tracking dashboard. We did not use Wandb, MLflow, Comet, Neptune, or TensorBoard. The acctouhou prognostics model runs CPU-only and we do not train an LLM, so the metrics we care about are wall-clock latency and end-to-end correctness. The measured numbers live as JSON under [`results/submission_profile_benchmark_results/`](results/submission_profile_benchmark_results/), and the three profiling commands in Section 5.D regenerate equivalent runs.
+
+### C. Dataset
+
+The dataset is the NASA Prognostics Center B0xx Li-ion battery cycling dataset (NCA 18650 chemistry, US Public Domain). It is not committed to this repository. The setup steps below repeat Section 5.A Steps 4 and 5 so the template's Dataset section stands on its own.
+
+#### 1. Create the data directory
+
+```bash
+mkdir -p external/battery/nasa
+```
+
+This matches the `BATTERY_DATA_DIR` default in `.env.public`.
+
+#### 2. Download from Google Drive
+
+> Access restricted to Columbia LionMail (`@columbia.edu`) accounts.
+
+<https://drive.google.com/drive/folders/1nV3nh7WHR0k2WfFvfyzT_K24OOYAbpOP?usp=sharing>
+
+The Drive contains two folders. The NASA cycling data folder holds a flat collection of `B*.json` files. Move all of them into `external/battery/nasa/`. (The other folder holds the pretrained model artifacts. See Section 5.A Step 5 for those instructions.)
+
+#### 3. Load into CouchDB
+
+```bash
+uv run python -m couchdb.init_battery --drop
+```
+
+Reads `external/battery/nasa/` and writes the cells listed in `BATTERY_CELL_SUBSET` (the default is 14 cells).
+
+### D. Evaluation, Profiling, and Limitations
+
+We do not train a model and we do not report a task-accuracy metric. What we performed is system-level performance benchmarking of the optimizations layered on top of the frozen pretrained model.
+
+#### No training
+
+The model is the frozen pretrained acctouhou Keras pipeline (4 `.h5` weights and 4 `.npy` norms). We do not train or fine-tune it. Everything in this project is on the inference side.
+
+#### No model-accuracy metric
+
+We do not report MAE or RMSE on RUL, voltage curves, or impedance. The acctouhou model was trained on the Severson LFP dataset, while NASA B0xx cells are NCA 18650. Both are lithium-ion, but the cathode chemistries differ, so predicted absolute values are off relative to the NASA ground truth. Fine-tuning on NASA cycling data would close that gap. Fine-tuning was out of scope, and we recommend it as future work.
+
+The system-performance benchmarks below are unaffected. They measure wall-clock latency, not output accuracy.
+
+#### Performance benchmarks (three profiling commands)
+
+There are three distinct profiling entry points. Each writes JSON to `src/servers/battery/profiles/`. The submission-run outputs are committed under `results/submission_profile_benchmark_results/`.
+
+**1. Optimization ablation.** 5-rung ladder, in-process (no MCP, no LLM). Measures the cumulative effect of parallel CouchDB fetch, compiled TF graphs, batched predict, and disk cache.
+
+```bash
+uv run python -m servers.battery.profiling.benchmark_optimizations --repeats 3
+```
+
+**2. MCP-level batch demo.** Compares N per-cell `predict_rul` MCP calls against one `predict_rul_batch` MCP call. No planner, no LLM, just a direct `_call_tool` invocation. Isolates the subprocess-spawn savings of collapsing tool calls.
+
+```bash
+uv run python -m servers.battery.profiling.mcp_batch_demo
+```
+
+**3. Scenario timing (optimizations disabled).** Runs all 11 in-context-window scenarios end-to-end with every optimization toggle off. We used this to identify the bottlenecks that the other two commands target.
+
+```bash
+BATTERY_PARALLEL_FETCH=0 BATTERY_GRAPH_PRECOMPILE=0 BATTERY_BATCHED_PREDICT=0 BATTERY_DISK_CACHE=0 \
+  uv run python -m servers.battery.profiling.profile_scenario \
+    --scenarios 1,2,4,5,6,7,8,9,10,12,13 \
+    --model-id "cerebras/llama3.1-8b"
+```
+
+#### Reproduction model
+
+Use `cerebras/llama3.1-8b` for all three benchmarks. That is the model every number in `results/submission_profile_benchmark_results/` was measured against. (We originally used `watsonx/meta-llama/llama-4-maverick-17b-128e-instruct-fp8` and switched to Cerebras after the watsonx API key was invalidated.)
+
+#### End-to-end correctness check
+
+```bash
+uv run pytest src/servers/battery/tests/
+```
+
+Validates the preprocessing math without needing TF, CouchDB, or an LLM. The sample `plan-execute` query in Section 5.A serves as the live integration test.
+
+### E. Quickstart: Reproduce the MCP Batching Speedup
+
+After Section 5.A is complete, run the command below to regenerate the MCP-level batching speedup from Section 3.
+
+```bash
+uv run python -m servers.battery.profiling.mcp_batch_demo
+```
+
+Writes a JSON to `src/servers/battery/profiles/mcp_batch_demo_<ts>.json`. The `mcp_per_cell.wall_s`, `mcp_batched.wall_s`, and `speedup` fields should match the MCP-level batching numbers in Section 3 (44.64 s to 7.37 s, 6.06×) to within run-to-run variance.
 
 ---
 
-## Repo layout (battery-relevant)
+## 6. Results and Observations
 
-```
-src/servers/battery/
-  README.md                    full server doc (env vars, troubleshooting)
-  scenarios_report.md          run report from the 15 scenarios
-  main.py                      FastMCP server, 10 tools
-  model_wrapper.py             TF model loader + compiled graph wrappers + predict helpers
-  preprocessing.py             NASA JSON cycle -> (4, 500) tensor [Q, V, I, T]
-  couchdb_client.py            CouchDB fetch helpers
-  diagnosis.py                 LLM-narrated failure-mode classifier
-  artifacts/                   weights + norms (gitignored)
-  profiles/                    profiling JSON outputs
-    ablation_study/            curated snapshots cited in the report
-  profiling/
-    benchmark_optimizations.py 5-rung ablation of the 4 optimizations
-    mcp_batch_demo.py          MCP per-cell vs batched comparison
-  tests/
+No embedded figure. We did not use Wandb, MLflow, or TensorBoard. The raw timing JSONs in [`results/submission_profile_benchmark_results/`](results/submission_profile_benchmark_results/) and the tables in Section 3 carry the same information.
 
-src/scenarios/local/battery_utterances.json   15 evaluation scenarios
+- Even a small LLM was able to plan and execute battery operations end-to-end, much like one would plan operations for a data center. Context-window limits constrain the longer queries that touch many cells at once.
 
-external/battery/nasa/                        raw NASA B0xx cycle data (gitignored)
-```
+- MCP-level batching was the largest single speedup we observed (6.06×, from roughly 45 s to 7 s on a 10-cell query). Collapsing many per-cell tool calls into one batched call beats fanning out, because each call spawns a fresh subprocess that pays the framework setup and model-load cost. On CPU with a small LLM, this overhead matters more than the LLM call itself.
+
+- A disk cache pays off whenever you have an expensive recurring computation, such as running a neural network on CPU. On a warm cache the model inference disappears, which gave us a 2.85× speedup on that rung.
+
+- A bigger and more diverse benchmark suite would have made the cache analysis more useful. Battery is a new domain inside AssetOpsBench, so we authored only 15 scenarios ourselves, of which 11 completed cleanly under the small LLM (the failures came from limited context length). The HVAC side of AssetOpsBench has been filled in by many contributors over time and now holds hundreds of scenarios, which gives a realistic weekly-to-monthly workflow signal and lets you measure the amortized cache-reuse rate. We did not get to that scale.
+
+- Pre-compiling the model graph at boot did not help much (about 3%), most likely because the underlying model is small enough that graph re-compile is not a large fraction of total inference time on CPU.
+
+- Batching the model call across cells inside the MCP server did not help on CPU (within run-to-run noise). The model is small enough that the work scales linearly with batch size on CPU, so there is nothing left to amortize.
 
 ---
 
-## Where to go next
+## 7. Notes
 
-| For… | Read |
-|---|---|
-| Per-tool details, env vars, disk cache mechanics | [`src/servers/battery/README.md`](src/servers/battery/README.md) |
-| Optimization / ablation measurements | [`src/servers/battery/profiles/ablation_study/`](src/servers/battery/profiles/ablation_study/) |
-| Run report across all 15 scenarios | [`src/servers/battery/scenarios_report.md`](src/servers/battery/scenarios_report.md) |
-| Upstream AssetOpsBench framework (agent, planner, other servers) | [`OLD_README.md`](OLD_README.md) |
+- Source files live under `src/`, configuration under `configs/`, and scripts under `scripts/`.
+- Trained checkpoints are stored in [GitHub Releases / Hugging Face Hub / external bucket]. See `docs/checkpoints.md`.
+- All secrets (API keys, Wandb tokens) are loaded from environment variables. See `.env.example`.
+
+### AI Use Disclosure
+
+*Per the HPML AI Use Policy (posted on CourseWorks). Required for every submission.*
+
+**Did your team use any AI tool in completing this project?**
+
+- [ ] No, we did not use any AI tool.
+- [ ] Yes, we used AI assistance as described below.
+
+**Tool(s) used:** *e.g., ChatGPT, Claude, GitHub Copilot, Cursor*
+
+**Specific purpose:** *e.g., debugged a CUDA OOM error, clarified SM occupancy, polished prose in the report's introduction*
+
+**Sections affected:** *e.g., src/profile.py setup, README Section 6 results narrative, report Section V Discussion*
+
+**How we verified correctness:** *e.g., re-ran every reported experiment ourselves; confirmed profiler-trace interpretations against the raw traces in results/; rewrote AI-suggested code in our own words and confirmed it produces the same numbers as the version we hand-wrote.*
+
+By submitting this project, the team confirms that the analysis, interpretations, and conclusions are our own, and that any AI assistance is fully disclosed above. The same disclosure block appears as an appendix in the final report.
+
+### License
+
+Released under the MIT License. See [`LICENSE`](LICENSE).
+
+### Citation
+
+If you build on this work, please cite:
+
+```bibtex
+@misc{teamname2026hpml,
+  title  = {[Project Title]},
+  author = {Last1, First1 and Last2, First2 and Last3, First3},
+  year   = {2026},
+  note   = {HPML Spring 2026 Final Project, Columbia University},
+  url    = {https://github.com/<org>/<repo>}
+}
+```
+
+### Contact
+
+Open a GitHub Issue or email *[team-contact@columbia.edu]*.
+
+---
+
+*HPML Spring 2026 — Dr. Kaoutar El Maghraoui — Columbia University*
