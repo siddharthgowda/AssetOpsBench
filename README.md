@@ -136,15 +136,22 @@ We did not follow the template's exact layout because we built on top of AssetOp
 
 AssetOpsBench is uv-managed we run it CPU-only on Apple Silicon, and it depends on Docker-hosted CouchDB plus manually-downloaded model artifacts and NASA data.
 
-**Requirements:** Python 3.12+, [uv](https://docs.astral.sh/uv/), Docker, and a Columbia LionMail (`@columbia.edu`) account for the Step 5 download.
+**Requirements:** Python 3.12+, [uv](https://docs.astral.sh/uv/), Docker, and a Columbia LionMail (`@columbia.edu`) account for the Step 6 download.
 
-#### 1. Install uv
+#### 1. Clone the repository
+
+```bash
+git clone https://github.com/siddharthgowda/AssetOpsBench.git
+cd AssetOpsBench
+```
+
+#### 2. Install uv
 
 ```bash
 brew install uv
 ```
 
-#### 2. Install dependencies
+#### 3. Install dependencies
 
 ```bash
 uv sync --group battery
@@ -152,7 +159,7 @@ uv sync --group battery
 
 `--group battery` is required. Plain `uv sync` omits `tensorflow` and `tf_keras`, so the battery server fails on import.
 
-#### 3. Configure `.env`
+#### 4. Configure `.env`
 
 ```bash
 cp .env.public .env
@@ -179,7 +186,7 @@ WATSONX_URL=https://us-south.ml.cloud.ibm.com
 
 Invoke with e.g. `--model-id "watsonx/meta-llama/llama-3-3-70b-instruct"`.
 
-#### 4. Create the artifact / data directories
+#### 5. Create the artifact / data directories
 
 ```bash
 mkdir -p src/servers/battery/artifacts/weights \
@@ -188,7 +195,7 @@ mkdir -p src/servers/battery/artifacts/weights \
          external/battery/nasa
 ```
 
-#### 5. Download the model + NASA cycling data
+#### 6. Download the model + NASA cycling data
 
 > Access restricted to Columbia LionMail (`@columbia.edu`).
 
@@ -199,19 +206,19 @@ The Drive has two folders.
 - NASA cycling data (`B*.json` files), move all into `external/battery/nasa/`.
 - Model artifacts (4 `.h5` weights and 4 `.npy` norms). The `.h5` files go in `src/servers/battery/artifacts/weights/`, and the `.npy` files go in `src/servers/battery/artifacts/norms/`.
 
-#### 6. Start CouchDB
+#### 7. Start CouchDB
 
 ```bash
 docker compose -f docker-compose.couchdb.yml up -d
 ```
 
-#### 7. Load the battery dataset
+#### 8. Load the battery dataset
 
 ```bash
 uv run python -m couchdb.init_battery --drop
 ```
 
-#### 8. Smoke test, boot the server (optional)
+#### 9. Smoke test, boot the server (optional)
 
 ```bash
 uv run battery-mcp-server
@@ -219,7 +226,7 @@ uv run battery-mcp-server
 
 > If the command runs without an error (warnings are fine), it is working. The server uses stdio and waits idle for a client. `Ctrl-C` to exit.
 
-#### 9. Run a sample scenario
+#### 10. Run a sample scenario
 
 ```bash
 uv run plan-execute \
@@ -249,7 +256,7 @@ This matches the `BATTERY_DATA_DIR` default in `.env.public`.
 
 [https://drive.google.com/drive/folders/1nV3nh7WHR0k2WfFvfyzT_K24OOYAbpOP?usp=sharing](https://drive.google.com/drive/folders/1nV3nh7WHR0k2WfFvfyzT_K24OOYAbpOP?usp=sharing)
 
-The Drive contains two folders. The NASA cycling data folder holds a flat collection of `B*.json` files. Move all of them into `external/battery/nasa/`. (The other folder holds the pretrained model artifacts. See Section 5.A Step 5 for those instructions.)
+The Drive contains two folders. The NASA cycling data folder holds a flat collection of `B*.json` files. Move all of them into `external/battery/nasa/`. (The other folder holds the pretrained model artifacts. See Section 5.A Step 6 for those instructions.)
 
 #### 3. Load into CouchDB
 
@@ -338,8 +345,8 @@ No embedded figure. We did not use Wandb, MLflow, or TensorBoard. The raw timing
 ## 7. Notes
 
 - Source code lives under `src/`. The battery server (`src/servers/battery/`) is the primary new addition. We extended `fmsr` with a five-mode battery failure-mode taxonomy and left the other upstream servers (`iot`, `tsfm`, `wo`, `vibration`, `utilities`) unchanged.
-- We do not train. The pretrained acctouhou model artifacts (four `.h5` weights, four `.npy` norms) are gitignored under `src/servers/battery/artifacts/`. Download them per Section 5.A Step 5.
-- API keys and CouchDB credentials load from environment variables. Copy `.env.public` to `.env` and fill in values per Section 5.A Step 3.
+- We do not train. The pretrained acctouhou model artifacts (four `.h5` weights, four `.npy` norms) are gitignored under `src/servers/battery/artifacts/`. Download them per Section 5.A Step 6.
+- API keys and CouchDB credentials load from environment variables. Copy `.env.public` to `.env` and fill in values per Section 5.A Step 4.
 
 ### AI Use Disclosure
 
