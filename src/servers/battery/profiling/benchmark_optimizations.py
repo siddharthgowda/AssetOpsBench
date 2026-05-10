@@ -180,6 +180,7 @@ def main() -> int:
     run_dir = args.output or (_DEFAULT_PROFILES_DIR / f"benchmark_{ts}")
     run_dir.mkdir(parents=True, exist_ok=True)
 
+    tests: list[dict] = []
     for name, pf, gp, bp, ca in rung_specs:
         m = run_rung(
             cells=cells,
@@ -203,6 +204,16 @@ def main() -> int:
         fname = name.lstrip("+ ").strip().replace(" ", "_") + ".json"
         (run_dir / fname).write_text(json.dumps(rung_record, indent=2), encoding="utf-8")
         print(f"  wrote {run_dir / fname}  wall={rung_record['wall_s']}s")
+        tests.append(rung_record)
+
+    summary = {
+        "n_cells": len(cells),
+        "n_repeats": args.repeats,
+        "cells": cells,
+        "tests": tests,
+    }
+    (run_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    print(f"  wrote {run_dir / 'summary.json'}")
 
     mw.cache_clear()
     print(f"\nWrote {run_dir}/")
