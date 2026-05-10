@@ -31,9 +31,9 @@
 
 - **GitHub repository:** [https://github.com/siddharthgowda/AssetOpsBench](https://github.com/siddharthgowda/AssetOpsBench)
 - **Original GitHub repository:** [https://github.com/IBM/AssetOpsBench](https://github.com/IBM/AssetOpsBench)
-- **Final report:** `[deliverables/report.pdf](deliverables/report.pdf)`
-- **Final presentation:** `[deliverables/presentation.pdf](deliverables/presentation.pdf)` (`[.pptx](deliverables/presentation.pptx)`)
-- **Experiment-tracking dashboard:** none. JSON results from our custom wall-clock profiling are committed in `[results/](results/)`.
+- **Final report:** [`deliverables/report.pdf`](deliverables/report.pdf)
+- **Final presentation:** [`deliverables/presentation.pdf`](deliverables/presentation.pdf) ([`.pptx`](deliverables/presentation.pptx))
+- **Experiment-tracking dashboard:** none. JSON results from our custom wall-clock profiling are committed in [`results/`](results/).
 
 The final report PDF and the presentation file are checked into the `deliverables/` folder of this repository **and** uploaded to CourseWorks.
 
