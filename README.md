@@ -57,7 +57,7 @@ AssetOpsBench, which is IBM's MCP-based agent benchmark for industrial asset ope
 
 ## 3. Final Results Summary
 
-The template's accuracy and training-time rows do not apply (see Section 5.D). We optimized wall-clock latency. The LLM we used has a 32K context window, which long scenarios overflow, so we benchmark only what we built (the battery tools). Both tables below exclude any LLM round-trip and map to committed JSONs in `[results/submission_profile_benchmark_results/](results/submission_profile_benchmark_results/)`.
+The template's accuracy and training-time rows do not apply (see Section 5.D). We optimized wall-clock latency. The LLM we used has a 32K context window, which long scenarios overflow, so we benchmark only what we built (the battery tools). Both tables below exclude any LLM round-trip and map to committed JSONs in [results/submission_profile_benchmark_results/](results/submission_profile_benchmark_results/).
 
 Profiling showed that with a small LLM through Cerebras, wall-clock time is dominated by the tool calls (especially RUL prediction), not the planning step. We optimized the tool layer for that reason and ran the ablations below to find the fastest configuration.
 
@@ -236,7 +236,7 @@ uv run plan-execute \
 
 ### B. Experiment Tracking Dashboard
 
-There is no public experiment-tracking dashboard. We did not use Wandb, MLflow, Comet, Neptune, or TensorBoard. The acctouhou prognostics model runs CPU-only and we do not train an LLM, so the metrics we care about are wall-clock latency and end-to-end correctness. The measured numbers live as JSON under `[results/submission_profile_benchmark_results/](results/submission_profile_benchmark_results/)`, and the three profiling commands in Section 5.D regenerate equivalent runs.
+There is no public experiment-tracking dashboard. We did not use Wandb, MLflow, Comet, Neptune, or TensorBoard. The acctouhou prognostics model runs CPU-only and we do not train an LLM, so the metrics we care about are wall-clock latency and end-to-end correctness. The measured numbers live as JSON under [results/submission_profile_benchmark_results/](results/submission_profile_benchmark_results/), and the three profiling commands in Section 5.D regenerate equivalent runs.
 
 ### C. Dataset
 
@@ -331,7 +331,7 @@ Writes one JSON per rung under `src/servers/battery/profiles/benchmark_<ts>/`. T
 
 ## 6. Results and Observations
 
-No embedded figure. We did not use Wandb, MLflow, or TensorBoard. The raw timing JSONs in `[results/submission_profile_benchmark_results/](results/submission_profile_benchmark_results/)` and the tables in Section 3 carry the same information.
+No embedded figure. We did not use Wandb, MLflow, or TensorBoard. The raw timing JSONs in [results/submission_profile_benchmark_results/](results/submission_profile_benchmark_results/) and the tables in Section 3 carry the same information.
 
 - Even a small LLM was able to plan and execute battery operations end-to-end, much like one would plan operations for a data center. Context-window limits constrain the longer queries that touch many cells at once.
 - MCP-level batching was the largest single speedup we observed (6.06×, from roughly 45 s to 7 s on a 10-cell query). Collapsing many per-cell tool calls into one batched call beats fanning out, because each call spawns a fresh subprocess that pays the framework setup and model-load cost. On CPU with a small LLM, this overhead matters more than the LLM call itself.
@@ -387,7 +387,7 @@ If you build on this work, please cite:
 
 ### Contact
 
-Open a GitHub Issue or email *[[scg2178@colubmia.edu](mailto:scg2178@colubmia.edu)]*.
+Open a GitHub Issue or email [scg2178@columbia.edu](mailto:scg2178@columbia.edu), [rsb2213@columbia.edu](mailto:rsb2213@columbia.edu), [aa5775@columbia.edu](mailto:aa5775@columbia.edu), or [wl3062@columbia.edu](mailto:wl3062@columbia.edu).
 
 ---
 
