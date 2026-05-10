@@ -362,7 +362,7 @@ By submitting this project, the team confirms that the analysis, interpretations
 
 ### License
 
-Released under the Apache License 2.0. See `[LICENSE](LICENSE)`.
+Released under the Apache License 2.0. See [`LICENSE`](LICENSE).
 
 ### Citation
 
