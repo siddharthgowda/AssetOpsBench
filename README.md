@@ -1,5 +1,7 @@
 # HPML Final Project: AgentOpsBench: High-Throughput Agentic AI for Battery Analytics
 
+> This README exists only to fit the Columbia HPML project submission requirements. The actual AssetOpsBench README is preserved at [`OLD_README.md`](OLD_README.md).
+
 > Please read this first. Our project, after discussion with our IBM mentor, ended up straying away from the typical project format for this class. It has two aspects.
 >
 > 1. An agentic MCP server implementation for battery analytics (the agent / application side).
